@@ -1,4 +1,4 @@
-// Tests for processFontFiles pure utility functions — weight extraction, subfamily processing, sorting
+// Tests for processFontFiles pure utility functions — weight extraction, subfamily processing, sorting, preserveFileNames
 import { describe, it, expect } from 'vitest';
 import {
 	extractWeightName,
@@ -10,6 +10,7 @@ import {
 	sortFontObjects,
 	createFontObject,
 } from '../utils/processFontFiles';
+import { sanitizeForSanityId } from '../utils/sanitizeForSanityId';
 
 // ---------------------------------------------------------------------------
 // Shared mock helpers
@@ -327,5 +328,55 @@ describe('createFontObject', () => {
 		const file = new File([''], 'MyFont-Bold.ttf');
 		const obj = createFontObject('myfont-bold', 'MyFont Bold', 'MyFont', font, false, 'Bold', '', file, null);
 		expect(obj).not.toHaveProperty('originalFilename');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// preserveFileNames — ID and title derivation from filename
+// ---------------------------------------------------------------------------
+
+describe('preserveFileNames filename normalization', () => {
+	it('splits hyphens into spaces', () => {
+		const filename = 'OwnersNarrow-RegularItalic';
+		const normalized = filename.replace(/-/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
+		expect(normalized).toBe('Owners Narrow Regular Italic');
+	});
+
+	it('splits camelCase boundaries', () => {
+		const filename = 'OwnersNarrowBoldItalic';
+		const normalized = filename.replace(/-/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
+		expect(normalized).toBe('Owners Narrow Bold Italic');
+	});
+
+	it('derives a valid Sanity ID from the normalized name', () => {
+		const filename = 'OwnersNarrow-RegularItalic';
+		const normalized = filename.replace(/-/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
+		const id = sanitizeForSanityId(normalized);
+		expect(id).toBe('owners-narrow-regular-italic');
+	});
+
+	it('preserves X-prefixed shortenings (XNarrow stays XNarrow)', () => {
+		const filename = 'Owners-XNarrowItalic';
+		const normalized = filename.replace(/-/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
+		// 'XNarrow' — X is uppercase followed by N uppercase, no split between consecutive uppercase
+		expect(normalized).toContain('XNarrow');
+	});
+
+	it('strips font file extension before normalizing', () => {
+		const fullFilename = 'MyFont-Bold.ttf';
+		const stripped = fullFilename.replace(/\.(ttf|otf|woff2?|eot|svg)$/i, '');
+		expect(stripped).toBe('MyFont-Bold');
+	});
+
+	it('handles woff2 extension', () => {
+		const fullFilename = 'MyFont-Bold.woff2';
+		const stripped = fullFilename.replace(/\.(ttf|otf|woff2?|eot|svg)$/i, '');
+		expect(stripped).toBe('MyFont-Bold');
+	});
+
+	it('collapses multiple spaces from complex filenames', () => {
+		const filename = 'My--Font---Bold';
+		const normalized = filename.replace(/-/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s+/g, ' ').trim();
+		expect(normalized).toBe('My Font Bold');
 	});
 });

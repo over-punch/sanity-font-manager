@@ -36,12 +36,11 @@ export const updateTypefaceDocument = async (
 	console.log('Updating typeface document with new fonts:', { fontRefs, variableRefs, subfamilies, uniqueSubfamilies });
 	setStatus('Updating typeface references...');
 
+	// Use dot-path keys so .set() does not clobber sibling fields
+	// (styles.collections, styles.pairs, styles.free, styles.displayStyles)
 	let patch = {
-		styles: {
-			fonts: stylesObject.fonts ? [...stylesObject.fonts, ...fontRefs] : [...fontRefs],
-			subfamilies: uniqueSubfamilies.length > 1 ? uniqueSubfamilies : [],
-			variableFont: stylesObject?.variableFont ? [...stylesObject.variableFont, ...variableRefs] : [...variableRefs],
-		},
+		'styles.fonts': stylesObject.fonts ? [...stylesObject.fonts, ...fontRefs] : [...fontRefs],
+		'styles.variableFont': stylesObject?.variableFont ? [...stylesObject.variableFont, ...variableRefs] : [...variableRefs],
 	};
 
 	setStatus('Organising font subfamilies...');
@@ -84,7 +83,7 @@ export const updateTypefaceDocument = async (
 		}));
 	}
 
-	patch.styles.subfamilies = subfamiliesArray;
+	patch['styles.subfamilies'] = subfamiliesArray;
 
 	// Optionally update preferred style
 	await updatePreferredStyle(doc_id, preferredStyleRef, newPreferredStyle, patch, client);
@@ -109,7 +108,8 @@ export const updateTypefaceDocument = async (
 };
 
 /**
- * Conditionally sets a new preferredStyle on the patch when the candidate has a higher weight.
+ * Sets preferredStyle on the patch only when currently empty.
+ * Does not overwrite an existing preferredStyle — the user's choice is sticky.
  * @param {string} doc_id
  * @param {Object} preferredStyleRef
  * @param {Object} newPreferredStyle
@@ -117,26 +117,15 @@ export const updateTypefaceDocument = async (
  * @param {Object} client
  */
 const updatePreferredStyle = async (doc_id, preferredStyleRef, newPreferredStyle, patch, client) => {
-	if (
-		preferredStyleRef?._ref &&
-		preferredStyleRef._ref !== '' &&
-		preferredStyleRef._ref !== null &&
-		newPreferredStyle._ref !== preferredStyleRef._ref
-	) {
-		// Parameterized — doc_id comes from Sanity's useFormValue but we parameterize defensively
-		const prefStyleResult = await client.fetch(
-			`*[_id == $docId]{ preferredStyle->{ weight, style, _id } }`,
-			{ docId: doc_id }
-		);
-		const prefStyle = prefStyleResult[0]?.preferredStyle;
+	const isCurrentlyEmpty = !preferredStyleRef?._ref || preferredStyleRef._ref === '' || preferredStyleRef._ref === null;
+	const hasCandidate = newPreferredStyle?._ref && newPreferredStyle._ref !== '';
 
-		if (!prefStyle?.weight || prefStyle === null || prefStyle.weight < newPreferredStyle.weight) {
-			patch.preferredStyle = {
-				_type: 'reference',
-				_ref: newPreferredStyle._ref,
-				_weak: true,
-			};
-		}
+	if (isCurrentlyEmpty && hasCandidate) {
+		patch.preferredStyle = {
+			_type: 'reference',
+			_ref: newPreferredStyle._ref,
+			_weak: true,
+		};
 	}
 };
 

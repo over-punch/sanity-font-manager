@@ -90,16 +90,16 @@ describe('patch assembly', () => {
 			stylesObject: { fonts: existing },
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		expect(patch.styles.fonts).toHaveLength(2);
-		expect(patch.styles.fonts.map(f => f._ref)).toContain('existing-font');
-		expect(patch.styles.fonts.map(f => f._ref)).toContain('new-font');
+		expect(patch['styles.fonts']).toHaveLength(2);
+		expect(patch['styles.fonts'].map(f => f._ref)).toContain('existing-font');
+		expect(patch['styles.fonts'].map(f => f._ref)).toContain('new-font');
 	});
 
 	it('uses only fontRefs when styles.fonts is empty', async () => {
 		const incoming = [{ _ref: 'new-font', _type: 'reference' }];
 		const client = await run({ fontRefs: incoming, stylesObject: {} });
 		const patch = client._patch.set.mock.calls[0][0];
-		expect(patch.styles.fonts).toEqual(incoming);
+		expect(patch['styles.fonts']).toEqual(incoming);
 	});
 
 	it('merges new variableRefs with existing styles.variableFont', async () => {
@@ -110,14 +110,14 @@ describe('patch assembly', () => {
 			stylesObject: { variableFont: existing },
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		expect(patch.styles.variableFont).toHaveLength(2);
+		expect(patch['styles.variableFont']).toHaveLength(2);
 	});
 
 	it('uses only variableRefs when styles.variableFont is absent', async () => {
 		const incoming = [{ _ref: 'new-vf', _type: 'reference' }];
 		const client = await run({ variableRefs: incoming, stylesObject: {} });
 		const patch = client._patch.set.mock.calls[0][0];
-		expect(patch.styles.variableFont).toEqual(incoming);
+		expect(patch['styles.variableFont']).toEqual(incoming);
 	});
 });
 
@@ -133,7 +133,7 @@ describe('subfamily grouping', () => {
 			subfamiliesArray: [],
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		const group = patch.styles.subfamilies.find(sf => sf.title === 'Condensed');
+		const group = patch['styles.subfamilies'].find(sf => sf.title === 'Condensed');
 		expect(group).toBeDefined();
 		expect(group._type).toBe('object');
 		expect(typeof group._key).toBe('string');
@@ -147,7 +147,7 @@ describe('subfamily grouping', () => {
 			subfamiliesArray: existing,
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		const groups = patch.styles.subfamilies.filter(sf => sf.title === 'Condensed');
+		const groups = patch['styles.subfamilies'].filter(sf => sf.title === 'Condensed');
 		expect(groups).toHaveLength(1);
 	});
 
@@ -161,7 +161,7 @@ describe('subfamily grouping', () => {
 			subfamiliesArray: [],
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		const group = patch.styles.subfamilies.find(sf => sf.title === 'Condensed');
+		const group = patch['styles.subfamilies'].find(sf => sf.title === 'Condensed');
 		const refs = group.fonts.map(f => f._ref);
 		expect(refs).toContain('myfont-bold');
 		expect(refs).toContain('myfont-light');
@@ -177,7 +177,7 @@ describe('subfamily grouping', () => {
 			subfamiliesArray: [],
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		const group = patch.styles.subfamilies.find(sf => sf.title === 'Condensed');
+		const group = patch['styles.subfamilies'].find(sf => sf.title === 'Condensed');
 		expect(group.fonts.map(f => f._ref)).not.toContain('myfont-vf');
 		expect(group.fonts.map(f => f._ref)).toContain('myfont-bold');
 	});
@@ -195,13 +195,13 @@ describe('subfamily grouping', () => {
 			subfamiliesArray: existing,
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		const group = patch.styles.subfamilies.find(sf => sf.title === 'Condensed');
+		const group = patch['styles.subfamilies'].find(sf => sf.title === 'Condensed');
 		expect(group.fonts.filter(f => f._ref === 'myfont-bold')).toHaveLength(1);
 	});
 
 	it('sets styles.subfamilies to [] when there is only one unique subfamily', async () => {
-		// Single subfamily means no grouping needed — patch.styles.subfamilies is the subfamiliesArray,
-		// but patch.styles.subfamilies (the raw list placeholder) is set to [] first
+		// Single subfamily means no grouping needed — patch['styles.subfamilies'] is the subfamiliesArray,
+		// but patch['styles.subfamilies'] (the raw list placeholder) is set to [] first
 		const client = await run({
 			uniqueSubfamilies: ['Regular'],
 			subfamilies: { 'myfont-regular': 'Regular' },
@@ -209,8 +209,8 @@ describe('subfamily grouping', () => {
 		});
 		const patch = client._patch.set.mock.calls[0][0];
 		// Initial placeholder is [] for single subfamily, overwritten with subfamiliesArray later
-		// Final patch.styles.subfamilies is the resolved subfamiliesArray (may have one entry)
-		expect(Array.isArray(patch.styles.subfamilies)).toBe(true);
+		// Final patch['styles.subfamilies'] is the resolved subfamiliesArray (may have one entry)
+		expect(Array.isArray(patch['styles.subfamilies'])).toBe(true);
 	});
 
 	it('handles multiple distinct subfamily groups', async () => {
@@ -223,7 +223,7 @@ describe('subfamily grouping', () => {
 			subfamiliesArray: [],
 		});
 		const patch = client._patch.set.mock.calls[0][0];
-		const titles = patch.styles.subfamilies.map(sf => sf.title);
+		const titles = patch['styles.subfamilies'].map(sf => sf.title);
 		expect(titles).toContain('Condensed');
 		expect(titles).toContain('Extended');
 	});
@@ -274,52 +274,88 @@ describe('client interactions', () => {
 // preferredStyle promotion
 // ---------------------------------------------------------------------------
 
-describe('preferredStyle promotion', () => {
-	it('does not set preferredStyle when preferredStyleRef has no _ref', async () => {
-		const client = await run({ preferredStyleRef: {} });
+describe('preferredStyle — sticky behaviour', () => {
+	it('does not set preferredStyle when preferredStyleRef has no _ref and candidate has no _ref', async () => {
+		const client = await run({
+			preferredStyleRef: {},
+			newPreferredStyle: { weight: -100, style: 'Italic', _ref: '' },
+		});
 		const patch = client._patch.set.mock.calls[0][0];
 		expect(patch.preferredStyle).toBeUndefined();
 	});
 
-	it('promotes preferredStyle when the existing preferred style has lower weight', async () => {
-		const client = mockClient({
-			fetchResult: [{ preferredStyle: { weight: 300, style: 'Regular', _id: 'light-font' } }],
-		});
-		await run({
-			client,
-			doc_id: 'typeface-abc',
-			preferredStyleRef: { _ref: 'light-font' },
-			newPreferredStyle: { weight: 700, style: 'Regular', _ref: 'bold-font' },
+	it('sets preferredStyle when currently empty and candidate has a _ref', async () => {
+		const client = await run({
+			preferredStyleRef: {},
+			newPreferredStyle: { weight: 400, style: 'Regular', _ref: 'new-font' },
 		});
 		const patch = client._patch.set.mock.calls[0][0];
 		expect(patch.preferredStyle).toEqual({
 			_type: 'reference',
-			_ref: 'bold-font',
+			_ref: 'new-font',
 			_weak: true,
 		});
 	});
 
-	it('does not promote preferredStyle when the existing preferred style has higher weight', async () => {
-		const client = mockClient({
-			fetchResult: [{ preferredStyle: { weight: 700, style: 'Regular', _id: 'bold-font' } }],
-		});
-		await run({
-			client,
-			preferredStyleRef: { _ref: 'bold-font' },
-			newPreferredStyle: { weight: 300, style: 'Regular', _ref: 'light-font' },
+	it('does NOT overwrite an existing preferredStyle — sticky', async () => {
+		const client = await run({
+			preferredStyleRef: { _ref: 'existing-pref' },
+			newPreferredStyle: { weight: 700, style: 'Regular', _ref: 'bold-font' },
 		});
 		const patch = client._patch.set.mock.calls[0][0];
 		expect(patch.preferredStyle).toBeUndefined();
 	});
 
-	it('promotes preferredStyle when the existing preferred style fetch returns null', async () => {
-		const client = mockClient({ fetchResult: [{ preferredStyle: null }] });
-		await run({
-			client,
-			preferredStyleRef: { _ref: 'some-font' },
+	it('treats empty string _ref as empty', async () => {
+		const client = await run({
+			preferredStyleRef: { _ref: '' },
 			newPreferredStyle: { weight: 400, style: 'Regular', _ref: 'new-font' },
 		});
 		const patch = client._patch.set.mock.calls[0][0];
 		expect(patch.preferredStyle?._ref).toBe('new-font');
+	});
+
+	it('treats null _ref as empty', async () => {
+		const client = await run({
+			preferredStyleRef: { _ref: null },
+			newPreferredStyle: { weight: 400, style: 'Regular', _ref: 'new-font' },
+		});
+		const patch = client._patch.set.mock.calls[0][0];
+		expect(patch.preferredStyle?._ref).toBe('new-font');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Dot-path patch preserves sibling fields
+// ---------------------------------------------------------------------------
+
+describe('dot-path patch keys', () => {
+	it('uses dot-path keys for styles.fonts and styles.variableFont', async () => {
+		const client = await run({
+			fontRefs: [{ _ref: 'font-1', _type: 'reference' }],
+		});
+		const patch = client._patch.set.mock.calls[0][0];
+		expect(patch).toHaveProperty('styles.fonts');
+		expect(patch).toHaveProperty('styles.variableFont');
+		// Must NOT have a nested styles object (which would clobber siblings)
+		expect(patch.styles).toBeUndefined();
+	});
+
+	it('does not include styles.collections or styles.pairs in the patch', async () => {
+		const client = await run({
+			stylesObject: {
+				fonts: [],
+				collections: [{ _ref: 'coll-1' }],
+				pairs: [{ _ref: 'pair-1' }],
+				free: [{ _ref: 'free-1' }],
+				displayStyles: [{ style: 'display' }],
+			},
+		});
+		const patch = client._patch.set.mock.calls[0][0];
+		// These fields should NOT appear in the patch at all
+		expect(patch['styles.collections']).toBeUndefined();
+		expect(patch['styles.pairs']).toBeUndefined();
+		expect(patch['styles.free']).toBeUndefined();
+		expect(patch['styles.displayStyles']).toBeUndefined();
 	});
 });

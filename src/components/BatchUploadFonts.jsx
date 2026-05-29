@@ -195,6 +195,7 @@ export const BatchUploadFonts = () => {
 				stylesObject,
 				setStatus,
 				setError,
+				preserveFileNames,
 			);
 
 			await updateTypefaceDocument(

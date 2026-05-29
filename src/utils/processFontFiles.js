@@ -55,7 +55,7 @@ export const processFontFiles = async (
 			await handleWebfontMetadata(file, font, files);
 		}
 
-		const { weightName, subfamilyName, fontTitle, style, italicKW, variableFont } = extractFontMetadata(
+		let { weightName, subfamilyName, fontTitle, style, italicKW, variableFont } = extractFontMetadata(
 			font,
 			title,
 			weightKeywordList,
@@ -63,11 +63,21 @@ export const processFontFiles = async (
 			preserveShortenedNames,
 		);
 
-		const id = sanitizeForSanityId(fontTitle);
-
+		let id;
 		let originalFilename = null;
+
 		if (preserveFileNames) {
 			originalFilename = file.name.replace(/\.(ttf|otf|woff2?|eot|svg)$/i, '');
+			// Normalize filename: hyphens to spaces, split camelCase boundaries, collapse whitespace
+			const normalizedName = originalFilename
+				.replace(/-/g, ' ')
+				.replace(/([a-z])([A-Z])/g, '$1 $2')
+				.replace(/\s+/g, ' ')
+				.trim();
+			fontTitle = normalizedName;
+			id = sanitizeForSanityId(normalizedName);
+		} else {
+			id = sanitizeForSanityId(fontTitle);
 		}
 
 		logFontInfo(id, fontTitle, font, file.name, subfamilyName, style, weightName, variableFont, italicKW);

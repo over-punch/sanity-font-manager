@@ -1,4 +1,4 @@
-// Core batch upload orchestrator — uploads each format to Sanity, generates CSS and metadata, then creates or updates font documents
+// Core batch upload orchestrator — uploads each format to Sanity, generates CSS and metadata, resolves existing documents, then creates or updates font documents
 
 import { nanoid } from 'nanoid';
 import generateCssFile from './generateCssFile';
@@ -14,6 +14,7 @@ import { parseVariableFontInstances } from './parseVariableFontInstances';
  * @param {Object} stylesObject - Existing typeface styles object
  * @param {Function} setStatus
  * @param {Function} setError
+ * @param {boolean} preserveFileNames - Use original filenames for asset naming
  * @returns {Promise<Object>} fontRefs, variableRefs, failedFiles
  */
 export const uploadFontFiles = async (
@@ -24,6 +25,7 @@ export const uploadFontFiles = async (
 	stylesObject,
 	setStatus,
 	setError,
+	preserveFileNames = false,
 ) => {
 	let fontRefs = [];
 	let variableRefs = [];
@@ -47,11 +49,27 @@ export const uploadFontFiles = async (
 			const file = files[j];
 			const fileType = determineFileType(file);
 
-			console.log(`[${i + 1}/${fontObjectKeys.length}][${j + 1}/${files.length}] Uploading font file: ${fontObject._id}.${fileType}`);
-			setStatus(`[${i + 1}/${fontObjectKeys.length}][${j + 1}/${files.length}] Uploading font file: ${fontObject._id}.${fileType}`);
+			// Use original filename for asset naming when preserveFileNames is enabled
+			const assetFilename = preserveFileNames && fontObject.originalFilename
+				? `${fontObject.originalFilename}.${fileType}`
+				: `${fontObject._id}.${fileType}`;
+
+			console.log(`[${i + 1}/${fontObjectKeys.length}][${j + 1}/${files.length}] Uploading font file: ${assetFilename}`);
+			setStatus(`[${i + 1}/${fontObjectKeys.length}][${j + 1}/${files.length}] Uploading font file: ${assetFilename}`);
 
 			try {
-				const baseAsset = await client.assets.upload('file', file, { filename: fontObject._id + '.' + fileType });
+				const baseAsset = await client.assets.upload('file', file, { filename: assetFilename });
+
+				// Sanity deduplicates assets by SHA1 hash and reuses the existing asset doc,
+				// which means originalFilename may reflect a previous upload. Patch it to
+				// match the intended filename so downstream consumers see the correct name.
+				if (preserveFileNames && baseAsset.originalFilename !== assetFilename) {
+					try {
+						await client.patch(baseAsset._id).set({ originalFilename: assetFilename }).commit();
+					} catch (renameErr) {
+						console.warn('Could not rename asset — permissions may be restricted:', renameErr.message);
+					}
+				}
 
 				newFileInput[fileType] = {
 					_type: 'file',
@@ -86,7 +104,7 @@ export const uploadFontFiles = async (
 					Object.assign(fontObject, metadata);
 				}
 			} catch (err) {
-				console.error('Error uploading font: ', fontObject.title, err.message);
+				console.error('Error uploading font:', fontObject.title, err.message);
 				setStatus('Error uploading font: ' + err.message);
 				setError(true);
 				failedFiles.push({ name: file.name, fk: fontKit });
@@ -137,7 +155,86 @@ const determineFileType = (file) => {
 };
 
 /**
+ * Resolves whether a font document already exists in Sanity, returning match details
+ * and a recommendation for how to proceed.
+ *
+ * Resolution strategies (in priority order):
+ *   1. Exact _id match or draft _id match or slug.current match
+ *   2. Content match by typefaceName + weightName + style + subfamily + variableFont
+ *
+ * @param {Object} font - The font object with _id, typefaceName, weightName, style, subfamily, variableFont
+ * @param {Object} client - Sanity client (parameterized queries only)
+ * @returns {Promise<{ exact: Object|null, candidates: Object[], recommendation: string }>}
+ */
+export const resolveExistingFont = async (font, client) => {
+	const result = { exact: null, candidates: [], recommendation: 'create' };
+
+	try {
+		// Strategy 1: ID / slug match
+		const idMatches = await client.fetch(
+			`*[_type == 'font' && (_id == $id || _id == $draftId || slug.current == $id)]{
+				_id, title, weight, style, weightName, typefaceName, subfamily, variableFont,
+				fileInput, description, metaData, metrics, opentypeFeatures, characterSet,
+				scriptFileInput, variableInstanceReferences
+			}`,
+			{ id: font._id, draftId: `drafts.${font._id}` }
+		);
+
+		if (idMatches.length > 0) {
+			result.exact = idMatches[0];
+			result.recommendation = 'use-exact';
+			return result;
+		}
+
+		// Strategy 2: Content match (only when ID query returns nothing)
+		const subfamily = font.subfamily || '';
+		const contentMatches = await client.fetch(
+			`*[_type == 'font'
+				&& lower(typefaceName) == lower($typefaceName)
+				&& lower(weightName) == lower($weightName)
+				&& lower(style) == lower($style)
+				&& (variableFont == $variableFont || (!defined(variableFont) && $variableFont == false))
+				&& (
+					lower(coalesce(subfamily, '')) == lower($subfamily)
+					|| (lower(coalesce(subfamily, '')) in ['', 'regular'] && lower($subfamily) in ['', 'regular'])
+				)
+			]{
+				_id, title, weight, style, weightName, typefaceName, subfamily, variableFont,
+				fileInput, description, metaData, metrics, opentypeFeatures, characterSet,
+				scriptFileInput, variableInstanceReferences
+			}`,
+			{
+				typefaceName: font.typefaceName,
+				weightName: font.weightName || '',
+				style: font.style || 'Regular',
+				variableFont: font.variableFont || false,
+				subfamily: subfamily === '' ? 'regular' : subfamily,
+			}
+		);
+
+		if (contentMatches.length === 1) {
+			result.candidates = contentMatches;
+			result.recommendation = 'use-candidate';
+			return result;
+		}
+
+		if (contentMatches.length > 1) {
+			result.candidates = contentMatches;
+			result.recommendation = 'ambiguous';
+			console.warn(`Ambiguous font match for "${font.title}" — ${contentMatches.length} candidates found:`,
+				contentMatches.map(c => c._id));
+			return result;
+		}
+	} catch (err) {
+		console.error('Error resolving existing font:', font._id, err.message);
+	}
+
+	return result;
+};
+
+/**
  * Creates a new font document or updates an existing one, returning its reference.
+ * Uses resolveExistingFont to determine whether to create or update.
  * @param {Object} font
  * @param {Object} client
  * @param {Function} setError
@@ -145,21 +242,7 @@ const determineFileType = (file) => {
  */
 const createOrUpdateFontDocument = async (font, client, setError) => {
 	try {
-		// Parameterized query prevents GROQ injection via font._id
-		const existingFont = await client.fetch(
-			`*[_type == 'font' && _id == $fontId]{
-				fileInput,
-				description,
-				metaData,
-				metrics,
-				opentypeFeatures,
-				characterSet,
-				subfamily,
-				scriptFileInput,
-				variableInstanceReferences
-			}`,
-			{ fontId: font._id }
-		).then(res => res[0]);
+		const { exact, candidates, recommendation } = await resolveExistingFont(font, client);
 
 		const { files, fontKit } = font;
 		delete font.files;
@@ -175,9 +258,15 @@ const createOrUpdateFontDocument = async (font, client, setError) => {
 		}
 
 		let fontResponse;
-		if (existingFont) {
-			fontResponse = await updateExistingFont(font, existingFont, client);
+		if (recommendation === 'use-exact' && exact) {
+			fontResponse = await updateExistingFont(font, exact, client);
+		} else if (recommendation === 'use-candidate' && candidates.length === 1) {
+			// Reassign font._id to match the existing document so inbound references resolve
+			console.log(`Content-match: reassigning "${font._id}" → "${candidates[0]._id}"`);
+			font._id = candidates[0]._id;
+			fontResponse = await updateExistingFont(font, candidates[0], client);
 		} else {
+			// 'ambiguous' or 'create' — create a new document
 			fontResponse = await createNewFont(font, client);
 		}
 
@@ -188,7 +277,7 @@ const createOrUpdateFontDocument = async (font, client, setError) => {
 			_weak: true,
 		};
 	} catch (e) {
-		console.error('Error creating font: ', font.title, font.subfamily, e);
+		console.error('Error creating font:', font.title, font.subfamily, e);
 		setError(true);
 		return null;
 	}
@@ -231,7 +320,7 @@ const updateExistingFont = async (font, existingFont, client) => {
 		font.variableInstanceReferences = existingFont.variableInstanceReferences;
 	}
 
-	console.log('Updating existing font: ', font._id, font.title);
+	console.log('Updating existing font:', font._id, font.title);
 
 	const patchObject = {
 		fileInput: font.fileInput,
@@ -253,7 +342,7 @@ const updateExistingFont = async (font, existingFont, client) => {
  * @returns {Promise<Object>}
  */
 const createNewFont = async (font, client) => {
-	console.log('Creating new font: ', font._id, font.title);
+	console.log('Creating new font:', font._id, font.title);
 	if (font.metaData) cleanMetadataValues(font);
 
 	const newDocument = {
@@ -276,7 +365,7 @@ const cleanMetadataValues = (font) => {
 		if (font.metaData[key] == null) {
 			font.metaData[key] = '';
 		} else {
-			font.metaData[key] = font.metaData[key].replace(/[ -]/g, '');
+			font.metaData[key] = font.metaData[key].replace(/[\x00-\x1f]/g, '');
 		}
 	});
 };
