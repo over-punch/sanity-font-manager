@@ -4,8 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Grid, Stack, Flex, Box, Text, Card } from '@sanity/ui';
 import { TrashIcon, ControlsIcon } from '@sanity/icons';
 import { useFormValue, set, unset } from 'sanity';
-import { Buffer } from 'buffer';
-import * as fontkit from 'fontkit';
+import { parseFont } from '../utils/parseFont';
 
 import { useSanityClient } from '../hooks/useSanityClient';
 import {
@@ -193,7 +192,7 @@ export const SingleUploaderTool = (props) => {
 			if (!ttfAsset?.url) throw new Error('Could not fetch TTF file URL');
 
 			const arrayBuffer = await (await fetch(ttfAsset.url)).arrayBuffer();
-			const font = fontkit.create(Buffer.from(arrayBuffer));
+			const font = await parseFont(arrayBuffer, `${doc_id}.ttf`);
 
 			const { weightName, subfamilyName, style, variableFont } = extractFontMetadata(
 				font,
@@ -349,7 +348,7 @@ export const SingleUploaderTool = (props) => {
 
 			if (code === 'ttf') {
 				const fontBuffer = await readFontFile(file);
-				const font = fontkit.create(fontBuffer);
+				const font = await parseFont(fontBuffer, file.name);
 				const { weightName, subfamilyName, style, variableFont } = extractFontMetadata(
 					font, doc_typefaceName, weightKeywordList, italicKeywordList
 				);

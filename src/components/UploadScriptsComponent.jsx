@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Flex, Grid, Stack, Text, TextInput, MenuButton, Menu, MenuItem, Select } from '@sanity/ui';
-import * as fontkit from 'fontkit';
+import { parseFont } from '../utils/parseFont';
+import { getNameString, getVariationAxes, getItalicAngle, getWeightClass } from '../utils/fontHelpers';
 import slugify from 'slugify';
 import { useSanityClient } from '../hooks/useSanityClient';
 import { useFormValue } from 'sanity';
@@ -91,25 +92,26 @@ export const UploadScriptsComponent = (props) => {
 
                 const file = event.target.files[i];
                 const fontBuffer = await readFontFile(file);
-                const font = fontkit.create(fontBuffer);
+                const font = await parseFont(fontBuffer, file.name);
 
-                console.log('reading font : ', font.fullName +' '+file.name, font.name.records);
+                const fullName = getNameString(font, 4);
+                const familyName = getNameString(font, 1);
+                console.log('Reading font:', fullName, file.name);
 
-                let weightName = font?.name?.records?.preferredSubfamily ? font?.name?.records?.preferredSubfamily: font?.name?.records?.fontSubfamily;
-                weightName = weightName?.en ? weightName.en: weightName.constructor == Object ? weightName[Object.keys(weightName)[0]] : weightName;
-				weightName = weightName?.replace("Italic", "").replace("It", "").trim();
+                let weightName = getNameString(font, 17) || getNameString(font, 2) || '';
+				weightName = weightName.replace("Italic", "").replace("It", "").trim();
 
-				if ((weightName == '' || weightName.toLowerCase() == 'roman') && font?.name?.records?.fullName) {
-					weightName = font?.name?.records?.fullName;
-					weightName = weightName?.en ? weightName.en: weightName.constructor == Object ? weightName[Object.keys(weightName)[0]] : weightName;
-					weightName = weightName?.replace(title + " ", "").replace(title, "").trim();
-					weightName = weightName?.replace("Italic", "").replace("It", "").trim();
+				if ((weightName == '' || weightName.toLowerCase() == 'roman') && fullName) {
+					weightName = fullName.replace(title + " ", "").replace(title, "").trim();
+					weightName = weightName.replace("Italic", "").replace("It", "").trim();
 				}
 
-                let variableFont = font?.variationAxes && Object.keys(font.variationAxes).length > 0 ? true: false;
-                let subfamilyName = font.familyName.toLowerCase().trim().replace(title.toLowerCase().trim(),'').trim();
-                let fontTitle = font?.fullName;
-                let style = (font?.italicAngle !== 0 || font?.fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular';
+                const axes = getVariationAxes(font);
+                let variableFont = axes !== null;
+                let subfamilyName = familyName.toLowerCase().trim().replace(title.toLowerCase().trim(),'').trim();
+                let fontTitle = fullName;
+                const italicAngle = getItalicAngle(font);
+                let style = (italicAngle !== 0 || fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular';
 
                 if(fontTitle.toLowerCase().trim().includes(script)){
                     fontTitle = fontTitle.toLowerCase().trim().replace(script, '').trim();
@@ -177,8 +179,8 @@ export const UploadScriptsComponent = (props) => {
 				console.log(' ')
 				console.log('font id : ', id);
 				console.log('font title : ', fontTitle);
-				console.log('fontkit fullName : ', font.fullName );
-				console.log('fontkit family name: ', font.familyName);
+				console.log('Full name:', fullName);
+				console.log('Family name:', familyName);
 				console.log('file name : ', file.name);
 				console.log('subfamily : ', subfamilyName);
 				console.log('style : ', style);
@@ -199,11 +201,11 @@ export const UploadScriptsComponent = (props) => {
                         title: fontTitle,
                         slug: {_type:'slug', current:id},
                         typefaceName: title, // Change to match Typeface Document
-                        style: (font?.italicAngle !== 0 || font?.fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular',
+                        style: style,
                         variableFont: variableFont,
                         weightName: weightName,
-                        normalWeight:true, // TODO : check if weight is normal ??
-                        weight: font['OS/2']?.usWeightClass ? Number(font['OS/2']?.usWeightClass) :
+                        normalWeight:true,
+                        weight: getWeightClass(font) || (
                             /hairline|extra thin|extrathin/.test(weightName?.toLowerCase()) ? 100 :
                             /thin|extra light|extralight/.test(weightName?.toLowerCase()) ? 200 :
                             /light|book/.test(weightName?.toLowerCase()) ? 300 :
@@ -213,7 +215,7 @@ export const UploadScriptsComponent = (props) => {
                             /bold/.test(weightName?.toLowerCase()) ? 700 :
                             /extra bold|extrabold/.test(weightName?.toLowerCase()) ? 800 :
                             /black|ultra/.test(weightName?.toLowerCase()) ? 900 :
-                            400,
+                            400),
                         files : [file],
                         fontKit: font,
                         scriptFileInput: {[script]:{}},

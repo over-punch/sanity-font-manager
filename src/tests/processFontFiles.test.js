@@ -11,38 +11,49 @@ import {
 	createFontObject,
 } from '../utils/processFontFiles';
 import { sanitizeForSanityId } from '../utils/sanitizeForSanityId';
+import { mockLibFont } from './fixtures/mockLibFont';
 
 // ---------------------------------------------------------------------------
 // Shared mock helpers
 // ---------------------------------------------------------------------------
 
-/** Builds a minimal fontkit-shaped mock font object */
+/** Builds a lib-font-shaped mock font object for processFontFiles tests */
 function mockFont({
 	preferredSubfamily = null,
 	fontSubfamily = 'Regular',
 	fullName = 'MyFont Regular',
-	fullNameEn = null,
 	familyName = 'MyFont',
 	italicAngle = 0,
 	variationAxes = null,
 	usWeightClass = null,
 } = {}) {
-	const font = {
-		familyName,
-		fullName,
-		italicAngle,
-		subfamilyName: fontSubfamily,
+	const fvar = variationAxes ? {
+		axes: Object.entries(variationAxes).map(([tag, axis]) => ({
+			tag,
+			minValue: axis.min,
+			maxValue: axis.max,
+			defaultValue: axis.default || axis.min,
+			flags: 0,
+			axisNameID: 256,
+		})),
+		instances: [],
+	} : null;
+
+	return mockLibFont({
 		name: {
-			records: {
-				preferredSubfamily: preferredSubfamily,
-				fontSubfamily: fontSubfamily,
-				fullName: fullNameEn ? { en: fullNameEn } : fullName,
-			},
+			0: 'Copyright 2024',
+			1: familyName,
+			2: fontSubfamily,
+			4: fullName,
+			5: 'Version 1.000',
+			6: fullName.replace(/\s+/g, '-'),
+			16: null,
+			17: preferredSubfamily,
 		},
-	};
-	if (variationAxes) font.variationAxes = variationAxes;
-	if (usWeightClass) font['OS/2'] = { usWeightClass };
-	return font;
+		os2: usWeightClass ? { usWeightClass, fsSelection: 0x40 } : { usWeightClass: 0, fsSelection: 0x40 },
+		post: { italicAngle },
+		fvar,
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -60,9 +71,9 @@ describe('extractWeightName', () => {
 		expect(extractWeightName(font, [])).toBe('Light');
 	});
 
-	it('returns "Variable" for variable fonts', () => {
+	it('returns empty string for variable fonts', () => {
 		const font = mockFont({ variationAxes: { wght: { min: 100, max: 900 } } });
-		expect(extractWeightName(font, [])).toBe('Variable');
+		expect(extractWeightName(font, [])).toBe('');
 	});
 
 	it('strips "Italic" from the weight name', () => {
@@ -75,9 +86,8 @@ describe('extractWeightName', () => {
 		expect(extractWeightName(font, ['Oblique'])).toBe('Bold');
 	});
 
-	it('handles preferredSubfamily as an object with an "en" key', () => {
-		const font = mockFont({ fontSubfamily: 'Regular' });
-		font.name.records.preferredSubfamily = { en: 'ExtraLight' };
+	it('reads preferredSubfamily via name ID 17', () => {
+		const font = mockFont({ preferredSubfamily: 'ExtraLight', fontSubfamily: 'Regular' });
 		expect(extractWeightName(font, [])).toBe('ExtraLight');
 	});
 });
@@ -97,8 +107,8 @@ describe('extractWeightFromFullName', () => {
 		expect(extractWeightFromFullName(font, 'MyFont')).toBe('Bold');
 	});
 
-	it('works when fullName is an object with an "en" key', () => {
-		const font = mockFont({ fullNameEn: 'MyFont ExtraLight' });
+	it('works with lib-font name table lookup', () => {
+		const font = mockFont({ fullName: 'MyFont ExtraLight' });
 		expect(extractWeightFromFullName(font, 'MyFont')).toBe('ExtraLight');
 	});
 });

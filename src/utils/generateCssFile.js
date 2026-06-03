@@ -1,7 +1,8 @@
 // Builds a @font-face CSS file from a WOFF2 blob — URL or base64 src, variable font axis descriptors, metric-tuned fallback @font-face for CLS reduction
+
 import base64 from 'base-64';
-import { Buffer } from 'buffer';
-import * as fontkit from 'fontkit';
+import { parseFont } from './parseFont';
+import { getVariationAxes, getFontMetrics, getFamilyClass, escapeCssFontName } from './fontHelpers';
 
 function _arrayBufferToBase64(buffer) {
 	var binary = '';
@@ -14,88 +15,83 @@ function _arrayBufferToBase64(buffer) {
 }
 
 /**
- * Reads variable axes from a fontkit font object and returns:
- *   { descriptors, skipped }
- * where `descriptors` is the CSS string for the @font-face block and
- * `skipped` lists axis tags that have no CSS descriptor (opsz, custom axes, etc.)
- * so callers can surface them in comments.
+ * Builds CSS @font-face axis descriptors from a variation axis map.
+ * Accepts a pre-built axis map (from getVariationAxes) rather than a raw font object,
+ * so callers can share a single parse result.
  *
- * Edge cases handled:
- *  - Degenerate axes (min === max): skipped — no actual variation range
- *  - ital with max === 0: skipped — axis exists but font has no italic
- *  - slnt ordering: sorted ascending as CSS spec requires
- *  - ital + slnt coexistence: slnt takes priority (more expressive)
- *  - min > max from corrupt font data: clamped with Math.min/Math.max
- * @param {Object} font - fontkit font instance
+ * @param {object|null} axisMap - Keyed axis map { wght: { min, max, default }, ... } or null
  * @returns {{ descriptors: string, skipped: string[] }}
  */
-export function buildVFDescriptors(font) {
-	const cssAxes = {}
-	const skipped = []
-	try {
-		const va = font.variationAxes
-		if (!va) return { descriptors: '', skipped: [] }
+export function buildVFDescriptors(axisMap) {
+	const cssAxes = {};
+	const skipped = [];
 
-		for (const [tag, axis] of Object.entries(va)) {
-			const lo = Math.min(axis.min, axis.max)
-			const hi = Math.max(axis.min, axis.max)
+	if (!axisMap) return { descriptors: '', skipped: [] };
+
+	try {
+		for (const [tag, axis] of Object.entries(axisMap)) {
+			const lo = Math.min(axis.min, axis.max);
+			const hi = Math.max(axis.min, axis.max);
 
 			// Skip degenerate axes — no actual range
-			if (lo === hi) { skipped.push(tag); continue }
+			if (lo === hi) { skipped.push(tag); continue; }
 
 			if (tag === 'wght') {
-				cssAxes['font-weight'] = `${lo} ${hi}`
+				cssAxes['font-weight'] = `${lo} ${hi}`;
 			} else if (tag === 'wdth') {
-				cssAxes['font-stretch'] = `${lo}% ${hi}%`
+				// Clamp to CSS font-stretch range (50-200%)
+				cssAxes['font-stretch'] = `${Math.max(50, lo)}% ${Math.min(200, hi)}%`;
 			} else if (tag === 'slnt') {
-				// slnt: ascending order required by CSS Fonts Level 4
-				cssAxes['font-style'] = `oblique ${lo}deg ${hi}deg`
+				// OpenType slnt is counter-clockwise positive; CSS oblique is clockwise positive
+				// Negate values and ensure ascending order
+				cssAxes['font-style'] = `oblique ${-hi}deg ${-lo}deg`;
 			} else if (tag === 'ital' && !cssAxes['font-style']) {
-				// ital: only emit if font actually has italic range; slnt takes priority
-				if (hi > 0) cssAxes['font-style'] = 'italic'
-				else skipped.push(tag)
+				// ital: only note if font has italic range; slnt takes priority
+				if (hi > 0) cssAxes['font-style'] = 'italic';
+				else skipped.push(tag);
 			} else {
 				// opsz, GRAD, XTRA, XHGT and all other custom axes have no CSS @font-face descriptor
-				skipped.push(tag)
+				skipped.push(tag);
 			}
 		}
 	} catch (_) {
 		// axes unreadable — no descriptors
 	}
-	const descriptors = Object.entries(cssAxes).map(([k, v]) => `${k}:${v}`).join(';') + (Object.keys(cssAxes).length ? ';' : '')
-	return { descriptors, skipped }
+
+	const descriptors = Object.entries(cssAxes).map(([k, v]) => `${k}:${v}`).join(';') + (Object.keys(cssAxes).length ? ';' : '');
+	return { descriptors, skipped };
 }
 
 // Cross-platform fallback font stacks by category.
-// Multiple local() sources ensure the first available system font is used.
-// Liberation Sans covers Linux; Roboto covers Android; Georgia is universal for serifs.
 const FALLBACK_STACKS = {
 	'sans-serif': "local('Arial'), local('Helvetica Neue'), local('Roboto'), local('Liberation Sans')",
 	'serif':      "local('Georgia'), local('Times New Roman'), local('Times')",
 	'monospace':  "local('Courier New'), local('Courier'), local('Menlo'), local('Monaco')",
-	// Display and script fonts have no universally suitable system fallback; default to sans-serif
 	'default':    "local('Arial'), local('Helvetica Neue'), local('Roboto'), local('Liberation Sans')",
 };
 
 // OS/2 sFamilyClass high byte → FALLBACK_STACKS key.
-// Classes 1–5,7 = serif variants; 8 = sans-serif; 9 = ornamental; 10 = script; 12 = symbolic.
 const FAMILY_CLASS_MAP = {
 	1: 'serif', 2: 'serif', 3: 'serif', 4: 'serif', 5: 'serif', 7: 'serif',
 	8: 'sans-serif',
 };
 
-// Darden Studio fonts have sFamilyClass: 0 (No Classification) in their OS/2 table,
+// Darden Studio fonts have sFamilyClass: 0 in their OS/2 table,
 // so name-based matching is used as the primary signal.
 const SERIF_NAMES  = /jubilat|corundum|dapifer|birra|daith/i;
 const SANS_NAMES   = /halyard|gamay|omnes|kit/i;
 
-/** Detects font category from the font name first, then OS/2 sFamilyClass as fallback */
+/**
+ * Detects font category from the font name first, then OS/2 sFamilyClass as fallback.
+ * @param {object} font - lib-font Font instance
+ * @param {string} fontName
+ * @returns {string}
+ */
 function detectFontCategory(font, fontName) {
 	if (fontName && SERIF_NAMES.test(fontName)) return 'serif';
 	if (fontName && SANS_NAMES.test(fontName)) return 'sans-serif';
 	try {
-		// fontkit v2: font['OS/2'] exposes the parsed OS/2 table directly
-		const familyClass = font['OS/2']?.sFamilyClass ?? 0;
+		const familyClass = getFamilyClass(font);
 		const highByte = (familyClass >> 8) & 0xFF;
 		return FAMILY_CLASS_MAP[highByte] ?? 'default';
 	} catch {
@@ -103,17 +99,23 @@ function detectFontCategory(font, fontName) {
 	}
 }
 
-/** Extracts metric override percentages and detects the category fallback stack from a font ArrayBuffer */
-function calcFallbackData(arrayBuffer, fontName) {
+/**
+ * Extracts metric override percentages and detects the category fallback stack.
+ * Accepts a pre-parsed font to avoid double-parsing.
+ * @param {object} font - lib-font Font instance
+ * @param {string} fontName
+ * @returns {{ fallbackSrc: string, ascentOverride: string, descentOverride: string, lineGapOverride: string }}
+ */
+function calcFallbackData(font, fontName) {
 	try {
-		let font = fontkit.create(Buffer.from(arrayBuffer));
-		let upm = font.unitsPerEm;
-		let category = detectFontCategory(font, fontName);
+		const metrics = getFontMetrics(font);
+		const upm = metrics.unitsPerEm;
+		const category = detectFontCategory(font, fontName);
 		return {
 			fallbackSrc: FALLBACK_STACKS[category],
-			ascentOverride: `${(font.ascent / upm * 100).toFixed(2)}%`,
-			descentOverride: `${(Math.abs(font.descent) / upm * 100).toFixed(2)}%`,
-			lineGapOverride: `${(font.lineGap / upm * 100).toFixed(2)}%`,
+			ascentOverride: `${(metrics.ascender / upm * 100).toFixed(2)}%`,
+			descentOverride: `${(Math.abs(metrics.descender) / upm * 100).toFixed(2)}%`,
+			lineGapOverride: `${(metrics.lineGap / upm * 100).toFixed(2)}%`,
 		};
 	} catch (err) {
 		console.error('Failed to extract fallback font data:', err);
@@ -138,35 +140,38 @@ export default async function generateCssFile({
 	client,
 }) {
 	try {
-		// Read the file once; reuse the same buffer for base64 encoding and fontkit analysis
+		// Read the file once; reuse the same buffer for base64 and font analysis
 		let arrayBuffer = await woff2File.arrayBuffer();
 		let b64 = _arrayBufferToBase64(arrayBuffer);
-		let fontkitFont = fontkit.create(Buffer.from(arrayBuffer));
-		let { fallbackSrc, ascentOverride, descentOverride, lineGapOverride } = calcFallbackData(arrayBuffer, fontName);
+
+		// Parse once — share result between axis descriptors and fallback metrics
+		let font = await parseFont(arrayBuffer, fileName + '.woff2');
+		let { fallbackSrc, ascentOverride, descentOverride, lineGapOverride } = calcFallbackData(font, fontName);
+
+		// Escape font name for CSS injection prevention
+		const safeFontName = escapeCssFontName(fontName);
 
 		let cssString;
 		if (variableFont) {
-			let { descriptors, skipped } = buildVFDescriptors(fontkitFont);
-			// Axes with no CSS @font-face descriptor (opsz needs font-optical-sizing:auto on elements;
-			// custom axes like GRAD require CSS @font-face syntax not yet standardised).
+			const axisMap = getVariationAxes(font);
+			let { descriptors, skipped } = buildVFDescriptors(axisMap);
 			let skipComment = skipped.length
 				? `/* axes present but have no @font-face descriptor: ${skipped.join(', ')}` +
 				  (skipped.includes('opsz') ? ' — add font-optical-sizing:auto to your element CSS' : '') +
 				  ' */'
-				: ''
-			cssString = `${skipComment}@font-face{font-family:'${fontName}';src:url(data:application/font-woff2;charset=utf-8;base64,${b64})format('woff2-variations');${descriptors}font-display:swap;}`;
+				: '';
+			cssString = `${skipComment}@font-face{font-family:'${safeFontName}';src:url(data:application/font-woff2;charset=utf-8;base64,${b64})format('woff2');${descriptors}font-display:swap;}`;
 		} else {
 			let fontStyle = style === 'Italic' ? 'italic' : 'normal';
-			cssString = `@font-face{font-family:'${fontName}';src:url(data:application/font-woff2;charset=utf-8;base64,${b64})format('woff2');font-weight:${weight};font-style:${fontStyle};font-display:swap;}`;
+			cssString = `@font-face{font-family:'${safeFontName}';src:url(data:application/font-woff2;charset=utf-8;base64,${b64})format('woff2');font-weight:${weight};font-style:${fontStyle};font-display:swap;}`;
 		}
 
-		// Fallback @font-face: tunes a category-appropriate system font to match the custom font's
-		// line metrics (ascent/descent/lineGap), reducing layout shift while the custom font loads.
-		// Customers who reference fontSrc in their own projects get this fallback automatically.
-		let fallbackCssString = `@font-face{font-family:'${fontName} Fallback';src:${fallbackSrc};ascent-override:${ascentOverride};descent-override:${descentOverride};line-gap-override:${lineGapOverride};}`;
+		// Fallback @font-face: tunes a system font to match the custom font's metrics for CLS reduction
+		let fallbackCssString = `@font-face{font-family:'${safeFontName} Fallback';src:${fallbackSrc};ascent-override:${ascentOverride};descent-override:${descentOverride};line-gap-override:${lineGapOverride};}`;
 
-		let uploadBuffer = Buffer.from(cssString + fallbackCssString, 'utf-8');
-		let doc = await client.assets.upload('file', uploadBuffer, { filename: fileName + '.css' });
+		// Upload as a text buffer (no Buffer polyfill needed — TextEncoder is native)
+		const cssBytes = new TextEncoder().encode(cssString + fallbackCssString);
+		let doc = await client.assets.upload('file', new Blob([cssBytes]), { filename: fileName + '.css' });
 
 		let newFileInput = language == null ?
 			{
@@ -175,9 +180,9 @@ export default async function generateCssFile({
 					_type: 'file',
 					asset: {
 						_type: 'reference',
-						_ref: doc._id
-					}
-				}
+						_ref: doc._id,
+					},
+				},
 			}
 			:
 			{
@@ -188,18 +193,15 @@ export default async function generateCssFile({
 						_type: 'file',
 						asset: {
 							_type: 'reference',
-							_ref: doc._id
-						}
-					}
-				}
-			}
+							_ref: doc._id,
+						},
+					},
+				},
+			};
 
 		return newFileInput;
-
-	}
-	catch (err) {
+	} catch (err) {
 		console.error(err);
 		throw err;
 	}
-
 }

@@ -1,35 +1,30 @@
-// Extracts metadata, metrics, glyph count, OpenType features, and variable axes from a TTF and optionally patches the Sanity font document
+// Extracts metadata, metrics, glyph count, OpenType features, and variable axes from a font and optionally patches the Sanity font document
 
-import { Buffer } from 'buffer';
-import * as fontkit from 'fontkit';
+import { parseFont } from './parseFont';
+import {
+	getFontMetadata,
+	getFontMetrics,
+	getVariationAxes,
+	getNamedInstances,
+	getAllFeatureTags,
+	getGlyphCount,
+	getCharacterSet,
+	getNameString,
+} from './fontHelpers';
 
 /**
- * Extracts metadata and metrics from a fontkit font object into plain objects.
- * @param {Object} font - fontkit font instance
+ * Extracts metadata and metrics from a lib-font parsed font into plain objects.
+ * Uses fontHelpers for all table access — no direct font.opentype.tables usage here.
+ * @param {object} font - lib-font Font instance
  * @returns {{ metaData: Object, metrics: Object }}
  */
 export function buildFontMetadata(font) {
-	const metaData = {
-		postscriptName: font.postscriptName,
-		fullName: font.fullName,
-		familyName: font.familyName,
-		subfamilyName: font.subfamilyName,
-		copyright: font.copyright,
-		version: font.version ? String(font.version).replaceAll('Version ', '') : '',
-		genDate: new Date().toISOString(),
-	};
-	const metrics = {
-		unitsPerEm: font.unitsPerEm,
-		ascender: font.ascent,
-		descender: font.descent,
-		lineGap: font.lineGap,
-		underlinePosition: font.underlinePosition,
-		underlineThickness: font.underlineThickness,
-		italicAngle: font.italicAngle,
-		capHeight: font.capHeight,
-		xHeight: font.xHeight,
-		boundingBox: font.bbox,
-	};
+	const metaData = getFontMetadata(font);
+	// Strip "Version " prefix for consistency with existing Sanity documents
+	if (metaData.version) {
+		metaData.version = String(metaData.version).replaceAll('Version ', '');
+	}
+	const metrics = getFontMetrics(font);
 	return { metaData, metrics };
 }
 
@@ -37,12 +32,11 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 	if (fontId.startsWith('drafts.')) {
 		fontId = fontId.replace('drafts.', '');
 	}
-	console.log('generate-font-data ', fontId, commit);
+	console.log('Generate font data:', fontId, commit);
 
 	let srcUrl;
 	if (!url || url == null) {
 		srcUrl = await client.fetch(`*[_id == $id]{url}`, { id: fileInput.ttf.asset._ref });
-		console.log('src url ', srcUrl);
 		srcUrl = srcUrl[0].url;
 	} else {
 		srcUrl = url;
@@ -52,82 +46,41 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 	if (!fontKit || fontKit == null) {
 		let buffer = await fetch(srcUrl);
 		buffer = await buffer.arrayBuffer();
-		buffer = Buffer.from(buffer);
-		font = fontkit.create(buffer);
+		font = await parseFont(buffer, `${fontId}.ttf`);
 	}
 
+	const variableAxes = getVariationAxes(font);
+	const namedInstances = getNamedInstances(font);
 
-	let variableAxes;
-	try {
-		variableAxes = font.variationAxes;
-	} catch (err) {
-		console.error('err: ', err);
-	}
-
-	let variableInstances;
-	try {
-		variableInstances = font.namedVariations;
-	} catch (e) {
-		console.log('variable instances 2 error : ', e.message);
-		let fvar = font?.fvar?.instance;
-
-		fvar?.forEach(fv => {
-			if (fv?.nameID === 2) fv.name = font?._tables?.name?.records?.fontSubfamily
-			if (fv?.nameID === 17) fv.name = font?._tables?.name?.records?.preferredSubfamily
-		})
-
+	// Build variableInstances as a keyed object matching existing Sanity document shape
+	let variableInstances = null;
+	if (namedInstances.length > 0 && variableAxes) {
 		variableInstances = {};
-		fvar.forEach(v => {
-			let key = v.name;
-			if (typeof key === 'object') {
-				key = Object.values(key)[0];
-			}
-
-			let coordKeys = Object.keys(variableAxes);
-			let coord = {};
-
-			coordKeys.forEach((ck, ckIndex) => {
-				coord[ck] = v.coord[ckIndex];
+		const axisTags = Object.keys(variableAxes);
+		for (const inst of namedInstances) {
+			const key = inst.name || inst.postScriptName || 'Unknown';
+			const coord = {};
+			axisTags.forEach((tag, index) => {
+				coord[tag] = inst.coordinates[index];
 			});
 			variableInstances[key] = coord;
-		});
-
+		}
 	}
-	console.log('font : ', font);
-	console.log('variable instances : ', variableInstances);
-	console.log('variable axes : ', variableAxes);
 
-	let opentypeFeatures = font.availableFeatures;
-	let glyphCount = font.numGlyphs;
-	let characterSet = font.characterSet;
+	console.log('Variable instances:', variableInstances);
+	console.log('Variable axes:', variableAxes);
 
-	let metaData = {
-		postscriptName: font.postscriptName,
-		fullName: font.fullName,
-		familyName: font.familyName,
-		subfamilyName: font.subfamilyName,
-		copyright: font.copyright,
-		version: font.version.replaceAll("Version ", ""),
-		genDate: new Date().toISOString(),
-	};
+	const opentypeFeatures = getAllFeatureTags(font);
+	const glyphCount = getGlyphCount(font);
+	const characterSet = getCharacterSet(font);
 
-	let metrics = {
-		unitsPerEm: font.unitsPerEm,
-		ascender: font.ascent,
-		descender: font.descent,
-		lineGap: font.lineGap,
-		underlinePosition: font.underlinePosition,
-		underlineThickness: font.underlineThickness,
-		italicAngle: font.italicAngle,
-		capHeight: font.capHeight,
-		xHeight: font.xHeight,
-		boundingBox: font.bbox
-	};
+	const { metaData, metrics } = buildFontMetadata(font);
 
 	let variableFont = false;
-	if (variableAxes && variableAxes != null && Object.keys(variableAxes).length > 0 && variableInstances && variableInstances != null && Object.keys(variableInstances).length > 0) {
+	if (variableAxes && variableInstances && Object.keys(variableInstances).length > 0) {
 		variableFont = true;
 	}
+
 	let patch = {
 		metrics: metrics,
 		metaData: metaData,
@@ -136,10 +89,10 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 		variableInstances: JSON.stringify(variableInstances),
 		glyphCount: glyphCount,
 		opentypeFeatures: { chars: opentypeFeatures },
-		characterSet: { chars: characterSet }
-	}
+		characterSet: { chars: characterSet },
+	};
 
-	console.log('data : ', patch);
+	console.log('Font data patch:', Object.keys(patch));
 	if (commit) patch = await client.patch(fontId).set(patch).commit({ autoGenerateArrayKeys: true });
 	return patch;
 }

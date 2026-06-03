@@ -1,19 +1,20 @@
-// Reads font files via FileReader, parses with fontkit, and builds the fontsObjects map — exports individual weight/style extraction helpers
+// Reads font files via FileReader, parses with lib-font, and builds the fontsObjects map — exports individual weight/style extraction helpers
 
-import * as fontkit from 'fontkit';
+import { parseFont } from './parseFont';
+import { getNameString, getVariationAxes, getItalicAngle, getWeightClass } from './fontHelpers';
 import { nanoid } from 'nanoid';
 import { expandAbbreviations, removeWeightNames, reverseSpellingLookup } from './generateKeywords';
 import { sanitizeForSanityId } from './sanitizeForSanityId';
 
 /**
- * Reads a font file and returns its content as a Uint8Array.
+ * Reads a font file and returns its content as an ArrayBuffer.
  * @param {File} file
- * @returns {Promise<Uint8Array>}
+ * @returns {Promise<ArrayBuffer>}
  */
 export const readFontFile = (file) => {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
-		reader.onload = (event) => { resolve(new Uint8Array(event.target.result)); };
+		reader.onload = (event) => { resolve(event.target.result); };
 		reader.onerror = (error) => { reject(error); };
 		reader.readAsArrayBuffer(file);
 	});
@@ -47,13 +48,12 @@ export const processFontFiles = async (
 	for (let i = 0; i < files.length; i++) {
 		const file = files[i];
 		const fontBuffer = await readFontFile(file);
-		const font = fontkit.create(fontBuffer);
+		const font = await parseFont(fontBuffer, file.name);
 
-		console.log('File name: ', file.name);
+		console.log('File name:', file.name);
 
-		if (file.name.endsWith('.woff2') || file.name.endsWith('.woff')) {
-			await handleWebfontMetadata(file, font, files);
-		}
+		// For webfonts with missing metadata, try to extract from TTF companion
+		const ttfFallbackMeta = await getWebfontFallbackMetadata(file, font, files);
 
 		let { weightName, subfamilyName, fontTitle, style, italicKW, variableFont } = extractFontMetadata(
 			font,
@@ -61,6 +61,7 @@ export const processFontFiles = async (
 			weightKeywordList,
 			italicKeywordList,
 			preserveShortenedNames,
+			ttfFallbackMeta,
 		);
 
 		let id;
@@ -109,72 +110,106 @@ export const processFontFiles = async (
 
 	console.log('Subfamilies:', subfamilies);
 	console.log('Unique subfamilies:', uniqueSubfamilies, uniqueSubfamilies.length);
-	console.log('Font objects:', fontsObjects);
+	console.log('Font objects:', Object.keys(fontsObjects));
 
 	return { fontsObjects, subfamilies, uniqueSubfamilies, newPreferredStyle, failedFiles };
 };
 
 /**
- * Patches webfont name records from a matching TTF when woff/woff2 metadata is missing.
+ * Gets fallback metadata from a matching TTF when woff/woff2 metadata is missing.
+ * Returns null if no fallback is needed or no TTF companion exists.
+ * Unlike the old fontkit approach, this does NOT mutate the font object.
  * @param {File} file
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {File[]} files
+ * @returns {Promise<{ fullName: string, familyName: string, subfamilyName: string, preferredSubfamily: string }|null>}
  */
-const handleWebfontMetadata = async (file, font, files) => {
-	if (
-		!font?.name?.records?.fullName ||
-		font?.name?.records?.fullName === '' ||
-		!/^[A-Z0-9]+$/.test(font?.name?.records?.fullName)
-	) {
-		const ttfFile = files.find(f => f.name === file.name.replace('.woff2', '.ttf').replace('.woff', '.ttf'));
-		if (ttfFile) {
-			const ttfFileBuffer = await readFontFile(ttfFile);
-			const ttfFileData = fontkit.create(ttfFileBuffer);
-			if (ttfFileData) font.name.records = ttfFileData?.name?.records;
-		}
+const getWebfontFallbackMetadata = async (file, font, files) => {
+	if (!file.name.endsWith('.woff2') && !file.name.endsWith('.woff')) return null;
+
+	const fullName = getNameString(font, 4);
+	// Check if name table is missing or corrupt (empty, or only uppercase hex-like garbage)
+	if (fullName && fullName !== '' && !/^[A-Z0-9]+$/.test(fullName)) return null;
+
+	const ttfFile = files.find(f => f.name === file.name.replace('.woff2', '.ttf').replace('.woff', '.ttf'));
+	if (!ttfFile) return null;
+
+	try {
+		const ttfBuffer = await readFontFile(ttfFile);
+		const ttfFont = await parseFont(ttfBuffer, ttfFile.name);
+		return {
+			fullName: getNameString(ttfFont, 4),
+			familyName: getNameString(ttfFont, 1),
+			subfamilyName: getNameString(ttfFont, 2),
+			preferredSubfamily: getNameString(ttfFont, 17),
+			preferredFamily: getNameString(ttfFont, 16),
+		};
+	} catch (err) {
+		console.warn('Could not parse TTF companion for webfont fallback:', err.message);
+		return null;
 	}
 };
 
 /**
- * Extracts and normalises metadata from a fontkit font object.
- * @param {Object} font
- * @param {string} title
+ * Extracts and normalises metadata from a lib-font parsed font object.
+ * @param {object} font - lib-font parsed font
+ * @param {string} title - Typeface title
  * @param {string[]} weightKeywordList
  * @param {string[]} italicKeywordList
  * @param {boolean} preserveShortenedNames
+ * @param {object|null} ttfFallbackMeta - Fallback metadata from TTF companion (for webfonts with missing names)
  * @returns {Object}
  */
-export const extractFontMetadata = (font, title, weightKeywordList, italicKeywordList, preserveShortenedNames = false) => {
-	let weightName = extractWeightName(font, italicKeywordList);
+export const extractFontMetadata = (font, title, weightKeywordList, italicKeywordList, preserveShortenedNames = false, ttfFallbackMeta = null) => {
+	let weightName = extractWeightName(font, italicKeywordList, ttfFallbackMeta);
 	if (!preserveShortenedNames) {
 		weightName = expandAbbreviations(weightName);
 	}
 
-	if ((weightName === '' || weightName.toLowerCase() === 'roman') && font?.name?.records?.fullName) {
-		weightName = extractWeightFromFullName(font, title);
+	const fullName = getNameString(font, 4) || ttfFallbackMeta?.fullName || '';
+
+	if ((weightName === '' || weightName.toLowerCase() === 'roman') && fullName) {
+		weightName = extractWeightFromFullName(font, title, ttfFallbackMeta);
 		if (!preserveShortenedNames) {
 			weightName = expandAbbreviations(weightName);
 		}
 	}
 
-	const variableFont = font?.variationAxes && Object.keys(font.variationAxes).length > 0;
+	const axes = getVariationAxes(font);
+	const variableFont = axes !== null;
 
-	let subfamilyName = font?.name?.records?.fullName?.en?.replace(title.trim(), '').trim() ||
-		font.subfamilyName.trim().replace(title.trim(), '').trim();
+	// Subfamily detection — extract width/optical variant from name table.
+	// Primary: nameId4 (fullName) minus typeface title — the most complete name record,
+	// always contains width + weight (e.g. "Gear XXNarrow Regular" → "XXNarrow Regular").
+	// Fallback: nameId1 (familyName) minus typeface title — contains width but not always weight.
+	// processSubfamilyName then strips weight/italic keywords, leaving just the width variant.
+	// This matches the production logic that has been reliable across all foundry sites.
+	const trimmedTitle = title.trim();
+
+	const nameId4Remainder = fullName ? fullName.replace(trimmedTitle, '').trim() : '';
+	const nameId1 = getNameString(font, 1) || ttfFallbackMeta?.familyName || '';
+	const nameId1Remainder = nameId1 ? nameId1.replace(trimmedTitle, '').trim() : '';
+
+	let subfamilyName = nameId4Remainder || nameId1Remainder;
 
 	if (!preserveShortenedNames) {
 		subfamilyName = expandAbbreviations(subfamilyName);
 	}
 
-	let fontTitle = font?.fullName.trim();
-	let style = (font?.italicAngle !== 0 || font?.fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular';
+	let fontTitle = fullName.trim() || '';
+	const italicAngle = getItalicAngle(font);
+	let style = (italicAngle !== 0 || fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular';
 
 	const italicKW = processItalicKeywords(font, fontTitle, italicKeywordList);
 
 	subfamilyName = processSubfamilyName(subfamilyName, weightKeywordList, italicKW, preserveShortenedNames);
 	fontTitle = formatFontTitle(fontTitle, preserveShortenedNames);
 
-	subfamilyName = subfamilyName === '' ? 'Regular' : subfamilyName.replace(/\s+/g, ' ').trim();
+	// Style-only names are not subfamilies — strip them
+	subfamilyName = subfamilyName
+		.replace(/\b(Italic|Slant|Slanted|Oblique|Backslant|Roman|Upright)\b/gi, '')
+		.replace(/\s+/g, ' ')
+		.trim();
 
 	if (subfamilyName !== '') {
 		weightName = weightName
@@ -187,6 +222,7 @@ export const extractFontMetadata = (font, title, weightKeywordList, italicKeywor
 		if (!fontTitle.toLowerCase().includes('vf')) {
 			fontTitle = fontTitle + ' VF';
 		}
+		// Variable fonts are not placed in subfamilies — they go in the separate variableFont array
 		subfamilyName = '';
 	}
 
@@ -200,20 +236,18 @@ export const extractFontMetadata = (font, title, weightKeywordList, italicKeywor
 /**
  * Extracts the weight name from a font's preferred subfamily or subfamily record.
  * Returns "Variable" for variable fonts.
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {string[]} italicKW
+ * @param {object|null} ttfFallbackMeta
  * @returns {string}
  */
-export const extractWeightName = (font, italicKW) => {
-	let weightName = font?.name?.records?.preferredSubfamily || font?.name?.records?.fontSubfamily;
+export const extractWeightName = (font, italicKW, ttfFallbackMeta = null) => {
+	let weightName = getNameString(font, 17) || getNameString(font, 2) ||
+		ttfFallbackMeta?.preferredSubfamily || ttfFallbackMeta?.subfamilyName || '';
 
-	if (typeof weightName === 'object') {
-		weightName = weightName?.en ||
-			(weightName.constructor === Object ? weightName[Object.keys(weightName)[0]] : null);
-	}
-
-	if (font?.variationAxes && Object.keys(font.variationAxes).length > 0) {
-		return 'Variable';
+	const axes = getVariationAxes(font);
+	if (axes !== null) {
+		return '';
 	}
 
 	if (italicKW) {
@@ -236,17 +270,15 @@ export const extractWeightName = (font, italicKW) => {
 
 /**
  * Extracts a weight name from the font's full name record when subfamily is empty or "Roman".
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {string} title
+ * @param {object|null} ttfFallbackMeta
  * @returns {string}
  */
-export const extractWeightFromFullName = (font, title) => {
-	let weightName = font?.name?.records?.fullName;
-	weightName = weightName?.en
-		? weightName.en
-		: (weightName?.constructor === Object ? weightName[Object.keys(weightName)[0]] : weightName);
-	weightName = weightName?.replace(title + ' ', '').replace(title, '').trim();
-	weightName = weightName?.replace('Italic', '').replace('It', '').replace('Slanted', '').replace('Slant', '').trim();
+export const extractWeightFromFullName = (font, title, ttfFallbackMeta = null) => {
+	let weightName = getNameString(font, 4) || ttfFallbackMeta?.fullName || '';
+	weightName = weightName.replace(title + ' ', '').replace(title, '').trim();
+	weightName = weightName.replace('Italic', '').replace('It', '').replace('Slanted', '').replace('Slant', '').trim();
 	return weightName;
 };
 
@@ -282,13 +314,14 @@ export const processSubfamilyName = (subfamilyName, weightKeywordList, italicKey
 
 /**
  * Collects italic keywords present in a font's full name.
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {string} fontTitle
  * @param {string[]} italicKeywordList
  * @returns {string[]}
  */
 export const processItalicKeywords = (font, fontTitle, italicKeywordList) => {
 	let italicKW = [];
+	const fullName = getNameString(font, 4);
 
 	italicKeywordList.forEach(keyword => {
 		const kw = keyword.trim();
@@ -297,7 +330,7 @@ export const processItalicKeywords = (font, fontTitle, italicKeywordList) => {
 			fontTitle = fontTitle.replace(kwRegex, '').trim();
 			italicKW.push(kw);
 		}
-		if (font?.fullName && typeof font.fullName === 'string' && font.fullName.toLowerCase().includes(kw.toLowerCase())) {
+		if (fullName && fullName.toLowerCase().includes(kw.toLowerCase())) {
 			if (!italicKW.includes(kw)) italicKW.push(kw);
 		}
 	});
@@ -327,7 +360,7 @@ export const formatFontTitle = (fontTitle, preserveShortenedNames = false) => {
 
 /**
  * Appends any italic keywords to the font title that aren't already present.
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {string} fontTitle
  * @param {string[]} italicKW
  * @param {string} style
@@ -335,8 +368,9 @@ export const formatFontTitle = (fontTitle, preserveShortenedNames = false) => {
  * @returns {string}
  */
 export const addItalicToFontTitle = (font, fontTitle, italicKW, style, preserveShortenedNames = false) => {
-	const hasItalicAngle = font?.italicAngle !== 0;
-	const hasItalicInName = font?.fullName.toLowerCase().includes('italic');
+	const hasItalicAngle = getItalicAngle(font) !== 0;
+	const fullName = getNameString(font, 4);
+	const hasItalicInName = fullName.toLowerCase().includes('italic');
 
 	if (italicKW.length > 0 || hasItalicAngle || hasItalicInName) {
 		italicKW = [...new Set(italicKW)];
@@ -379,7 +413,7 @@ export const addItalicToFontTitle = (font, fontTitle, italicKW, style, preserveS
  * @param {string} id
  * @param {string} fontTitle
  * @param {string} title
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {boolean} variableFont
  * @param {string} weightName
  * @param {string} subfamilyName
@@ -388,13 +422,16 @@ export const addItalicToFontTitle = (font, fontTitle, italicKW, style, preserveS
  * @returns {Object}
  */
 export const createFontObject = (id, fontTitle, title, font, variableFont, weightName, subfamilyName, file, originalFilename = null) => {
+	const italicAngle = getItalicAngle(font);
+	const fullName = getNameString(font, 4);
+
 	const fontObject = {
 		_key: nanoid(),
 		_id: id,
 		title: fontTitle,
 		slug: { _type: 'slug', current: id },
 		typefaceName: title,
-		style: (font?.italicAngle !== 0 || font?.fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular',
+		style: (italicAngle !== 0 || fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular',
 		variableFont: variableFont,
 		weightName: weightName,
 		subfamily: subfamilyName,
@@ -414,13 +451,14 @@ export const createFontObject = (id, fontTitle, title, font, variableFont, weigh
 
 /**
  * Determines a numeric CSS weight value for a font.
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {string} weightName
  * @returns {number}
  */
 export const determineWeight = (font, weightName) => {
-	if (font['OS/2']?.usWeightClass) {
-		return Number(font['OS/2'].usWeightClass);
+	const usWeightClass = getWeightClass(font);
+	if (usWeightClass) {
+		return Number(usWeightClass);
 	}
 
 	const wn = weightName?.toLowerCase() || '';
@@ -462,7 +500,7 @@ export const sortFontObjects = (fontsObjects) => {
  * Logs font metadata to the console for debugging.
  * @param {string} id
  * @param {string} fontTitle
- * @param {Object} font
+ * @param {object} font - lib-font parsed font
  * @param {string} fileName
  * @param {string} subfamilyName
  * @param {string} style
@@ -471,17 +509,21 @@ export const sortFontObjects = (fontsObjects) => {
  * @param {string[]} italicKW
  */
 export const logFontInfo = (id, fontTitle, font, fileName, subfamilyName, style, weightName, variableFont, italicKW) => {
+	const fullName = getNameString(font, 4);
+	const familyName = getNameString(font, 1);
+	const italicAngle = getItalicAngle(font);
+
 	console.log('=== Font Info ====');
-	console.log('Font id: ', id);
-	console.log('Font title: ', fontTitle);
-	console.log('Fontkit fullName: ', font.fullName);
-	console.log('Fontkit family name: ', font.familyName);
-	console.log('File name: ', fileName);
-	console.log('Subfamily: ', subfamilyName);
-	console.log('Style: ', style);
-	console.log('Weight: ', weightName);
-	console.log('Variable: ', variableFont);
-	console.log('italicKW: ', italicKW);
-	console.log('Font italic angle: ', (font?.italicAngle !== 0 || font?.fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular');
+	console.log('Font id:', id);
+	console.log('Font title:', fontTitle);
+	console.log('Full name:', fullName);
+	console.log('Family name:', familyName);
+	console.log('File name:', fileName);
+	console.log('Subfamily:', subfamilyName);
+	console.log('Style:', style);
+	console.log('Weight:', weightName);
+	console.log('Variable:', variableFont);
+	console.log('ItalicKW:', italicKW);
+	console.log('Italic detection:', (italicAngle !== 0 || fullName.toLowerCase().includes('italic')) ? 'Italic' : 'Regular');
 	console.log('=======');
 };

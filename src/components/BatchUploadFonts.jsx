@@ -1,9 +1,11 @@
 // Batch font uploader — drag-and-drop file list, confirm-to-upload, elapsed timer, Wake Lock, and beforeunload guard for long uploads
 
-import React, { useCallback, useState, useMemo, useRef, useEffect } from 'react';
+import React, { useCallback, useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { Card, Box, Flex, Grid, Text, Label, Switch, Button, Spinner, Tooltip, Stack } from '@sanity/ui';
 import { ControlsIcon, InfoOutlineIcon, TrashIcon, UploadIcon, WarningOutlineIcon } from '@sanity/icons';
 import { useFormValue } from 'sanity';
+
+const UploadModal = lazy(() => import('./UploadModal'));
 
 import { useSanityClient } from '../hooks/useSanityClient';
 import { processFontFiles } from '../utils/processFontFiles';
@@ -39,6 +41,7 @@ export const BatchUploadFonts = () => {
 	const [pendingFiles, setPendingFiles] = useState([]);
 	const [isDragging, setIsDragging] = useState(false);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
+	const [showUploadModal, setShowUploadModal] = useState(false);
 
 	const fileInputRef = useRef(null);
 	const elapsedTimerRef = useRef(null);
@@ -522,9 +525,28 @@ export const BatchUploadFonts = () => {
 		);
 	};
 
+	const hasRequiredFields = title && title !== '' && slug && slug !== '';
+
 	return (
 		<>
-			{title && title !== '' && slug && slug !== '' &&
+			{!hasRequiredFields && (
+				<Card border padding={4} radius={2} tone="caution">
+					<Flex align="center" gap={3}>
+						<Text size={2}>
+							<WarningOutlineIcon />
+						</Text>
+						<Stack space={2}>
+							<Text size={1} weight="semibold">
+								{!title || title === '' ? 'Title required to use font uploader' : 'Slug required to use font uploader'}
+							</Text>
+							<Text size={1} muted>
+								Add a {!title || title === '' ? 'title' : 'slug'} to this typeface document, then return to the Styles tab to upload fonts.
+							</Text>
+						</Stack>
+					</Flex>
+				</Card>
+			)}
+			{hasRequiredFields &&
 				<>
 					<StatusDisplay
 						status={status}
@@ -542,9 +564,37 @@ export const BatchUploadFonts = () => {
 						}
 					/>
 
-					<Card border padding={2} shadow={1} radius={2}>
-						{showUtilities ? (
-							<Stack space={4} marginTop={2}>
+					<Button
+						mode="default"
+						tone="primary"
+						icon={UploadIcon}
+						text="Upload Fonts"
+						fontSize={2}
+						padding={4}
+						onClick={() => setShowUploadModal(true)}
+						style={{ width: '100%' }}
+					/>
+
+					{/* New upload modal */}
+					{showUploadModal && (
+						<Suspense fallback={<Spinner />}>
+							<UploadModal
+								open={showUploadModal}
+								onClose={() => setShowUploadModal(false)}
+								client={client}
+								docId={doc_id}
+								typefaceTitle={title}
+								stylesObject={stylesObject}
+								preferredStyleRef={preferredStyleRef}
+								slug={slug}
+							/>
+						</Suspense>
+					)}
+
+					{/* Utilities panel — toggled via the Utilities button */}
+					{showUtilities && (
+						<Card border padding={3} shadow={1} radius={2} marginTop={3}>
+							<Stack space={4}>
 
 								{/* Regenerate Subfamilies */}
 								<Stack space={2}>
@@ -594,45 +644,8 @@ export const BatchUploadFonts = () => {
 								</Stack>
 
 							</Stack>
-						) : (
-							ready
-								? <>
-									<Grid columns={[2]} gap={4} marginTop={1} marginBottom={1}>
-										{/* Left: price */}
-										<Box>
-											<PriceInput inputPrice={inputPrice} handleInputChange={handleInputChange} />
-										</Box>
-										{/* Right: toggles */}
-										<Stack space={3}>
-											<Flex align="center" gap={2}>
-												<Switch
-													checked={preserveShortenedNames}
-													onChange={(e) => setPreserveShortenedNames(e.target.checked)}
-												/>
-												{renderTooltipLabel(
-													'Preserve shortened names',
-													'Abbreviations in font names are kept as-is (e.g. "XNarrow" stays "XNarrow", "Bd" stays "Bd").'
-												)}
-											</Flex>
-											<Flex align="center" gap={2}>
-												<Switch
-													checked={preserveFileNames}
-													onChange={(e) => setPreserveFileNames(e.target.checked)}
-												/>
-												{renderTooltipLabel(
-													'Preserve file names',
-													'Original filename capitalisation is used for asset naming instead of the normalised font title.'
-												)}
-											</Flex>
-										</Stack>
-									</Grid>
-									<Box marginTop={3}>
-										{pendingFiles.length === 0 ? renderDropZone() : renderFileList()}
-									</Box>
-								</>
-								: renderProcessing()
-						)}
-					</Card>
+						</Card>
+					)}
 				</>
 			}
 		</>

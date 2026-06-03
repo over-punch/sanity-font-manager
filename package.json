@@ -51,17 +51,17 @@
 	},
 	"dependencies": {
 		"base-64": "^1.0.0",
-		"buffer": "^6.0.3",
-		"fontkit": "^2.0.2",
+		"lib-font": "^3.0.1",
 		"nanoid": "^5.0.0",
+		"pako": "^2.1.0",
 		"slugify": "^1.6.6"
 	},
 	"peerDependencies": {
+		"@liiift-studio/sanity-advanced-reference-array": ">=1",
 		"@sanity/icons": ">=3",
 		"@sanity/ui": ">=3",
 		"react": ">=18",
-		"sanity": ">=3",
-		"@liiift-studio/sanity-advanced-reference-array": ">=1"
+		"sanity": ">=3"
 	},
 	"peerDependenciesMeta": {
 		"@liiift-studio/sanity-advanced-reference-array": {

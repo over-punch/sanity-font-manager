@@ -1,6 +1,6 @@
 // Renames font document IDs across a typeface when a typeface slug changes
 
-import * as fontkit from 'fontkit';
+import { parseFont } from './parseFont';
 import {
 	readFontFile,
 	extractFontMetadata,
@@ -100,7 +100,7 @@ export const renameFontDocuments = async ({
 				}
 
 				const fontBuffer = await readFontFile(file);
-				const font = fontkit.create(fontBuffer);
+				const font = await parseFont(fontBuffer, `${fontDoc._id}.ttf`);
 
 				const { weightName, subfamilyName, fontTitle } = extractFontMetadata(
 					font,

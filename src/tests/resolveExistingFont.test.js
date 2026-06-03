@@ -1,6 +1,6 @@
 // Tests for resolveExistingFont — document resolution with ID, slug, and content matching
 import { describe, it, expect, vi } from 'vitest';
-import { resolveExistingFont } from '../utils/uploadFontFiles';
+import { resolveExistingFont } from '../utils/resolveExistingFont';
 
 // ---------------------------------------------------------------------------
 // Mock Sanity client builder

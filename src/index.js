@@ -55,6 +55,51 @@ export { renameFontDocuments } from './utils/regenerateFontData.js';
 export { updateFontPrices } from './utils/updateFontPrices.js';
 export { sanitizeForSanityId } from './utils/sanitizeForSanityId.js';
 
+// Plan/Execute split — v3.0 upload modal architecture
+export { buildUploadPlan } from './utils/buildUploadPlan.js';
+export { executeUploadPlan } from './utils/executeUploadPlan.js';
+export { resolveExistingFont } from './utils/resolveExistingFont.js';
+export {
+	FONT_STATUS,
+	PLAN_PHASE,
+	RECOMMENDATION,
+	EXECUTION_STATUS,
+	PLAN_VERSION,
+	createFontDecisions,
+	createEmptyPlan,
+} from './utils/planTypes.js';
+export { planReducer } from './utils/planReducer.js';
+export { executionReducer, createInitialExecutionState } from './utils/executionReducer.js';
+
+// Upload modal components
+export { default as UploadModal } from './components/UploadModal.jsx';
+export { default as UploadStep1Settings } from './components/UploadStep1Settings.jsx';
+export { default as UploadStep2Review } from './components/UploadStep2Review.jsx';
+export { default as UploadStep3Execute } from './components/UploadStep3Execute.jsx';
+export { default as UploadSummary } from './components/UploadSummary.jsx';
+export { default as FontReviewCard } from './components/FontReviewCard.jsx';
+export { default as ExistingDocumentResolver } from './components/ExistingDocumentResolver.jsx';
+export { default as BulkActions } from './components/BulkActions.jsx';
+
+// Font parsing (lib-font wrappers)
+export { parseFont } from './utils/parseFont.js';
+export {
+	getNameString,
+	getAllFeatureTags,
+	getCharacterSet,
+	getVariationAxes,
+	getNamedInstances,
+	getFontMetrics,
+	getFontMetadata,
+	getWeightClass,
+	getFsSelection,
+	getMacStyle,
+	getItalicAngle,
+	getGlyphCount,
+	getFamilyClass,
+	escapeCssFontName,
+} from './utils/fontHelpers.js';
+
 // Schema field definitions
 export { openTypeField } from './schema/openTypeField.js';
 export { styleCountField } from './schema/styleCountField.js';

@@ -1,5 +1,7 @@
-// Returns a zeroed-out fontkit-shaped placeholder object used when no font binary is available
-import * as fontkit from 'fontkit';
+// Parses font files and returns name/subfamily metadata groupings without writing to Sanity
+
+import { parseFont } from './parseFont';
+import { getNameString, getVariationAxes } from './fontHelpers';
 import slugify from 'slugify';
 
 /** Reads font files and returns name/subfamily metadata without writing to Sanity */
@@ -12,14 +14,16 @@ export async function getEmptyFontKit({ title, files, weightKeywordList, italicK
 
 		const file = files[i];
 		const fontBuffer = await readFontFile(file);
-		const font = fontkit.create(fontBuffer);
+		const font = await parseFont(fontBuffer, file.name);
 
-		let weightName = font?.name?.records?.preferredSubfamily ? font?.name?.records?.preferredSubfamily : font?.name?.records?.fontSubfamily;
-		weightName = weightName?.en ? weightName.en : weightName.constructor == Object ? weightName[Object.keys(weightName)[0]] : weightName;
+		let weightName = getNameString(font, 17) || getNameString(font, 2) || '';
 
-		let variableFont = font?.variationAxes && Object.keys(font.variationAxes).length > 0 ? true : false;
-		let subfamilyName = font.familyName.toLowerCase().trim().replace(title.toLowerCase().trim(), '').trim();
-		let fontTitle = font?.fullName.toLowerCase().trim();
+		const axes = getVariationAxes(font);
+		let variableFont = axes !== null;
+		const familyName = getNameString(font, 1);
+		const fullName = getNameString(font, 4);
+		let subfamilyName = familyName.toLowerCase().trim().replace(title.toLowerCase().trim(), '').trim();
+		let fontTitle = fullName.toLowerCase().trim();
 
 		weightKeywordList.forEach(keyword => {
 			const kw = keyword.toLowerCase().trim();
@@ -65,32 +69,30 @@ export async function getEmptyFontKit({ title, files, weightKeywordList, italicK
 		if (!fontNames[id]) {
 			fontNames[id] = [{
 				file: file.name,
-				fullName: font.fullName,
-				familyName: font.familyName,
+				fullName: fullName,
+				familyName: familyName,
 				subFamily: subfamilyName,
 			}];
 		} else if (fontNames[id].indexOf(file.name) == -1) {
 			fontNames[id].push({
 				file: file.name,
-				fullName: font.fullName,
-				familyName: font.familyName,
+				fullName: fullName,
+				familyName: familyName,
 				subFamily: subfamilyName,
 			})
 		}
-
-
 	}
 
-	console.log('font names : ', fontNames);
+	console.log('Font names:', fontNames);
 }
 
-/** Reads a font file and returns its content as a Uint8Array */
+/** Reads a font file and returns its content as an ArrayBuffer */
 const readFontFile = (file) => {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
 
 		reader.onload = (event) => {
-			resolve(new Uint8Array(event.target.result));
+			resolve(event.target.result);
 		};
 
 		reader.onerror = (error) => { reject(error); };
