@@ -1,5 +1,9 @@
 // Entry point for @liiift-studio/sanity-font-manager — exports all font manager components, hooks, and utilities
 
+// Bootstrap decompressors FIRST — sets globalThis.pako and globalThis.unbrotli
+// before lib-font can be evaluated by any bundler. This must be the first import.
+import './utils/setupDecompressors.js';
+
 // Components
 export { BatchUploadFonts } from './components/BatchUploadFonts.jsx';
 export { GenerateCollectionsPairsComponent } from './components/GenerateCollectionsPairsComponent.jsx';

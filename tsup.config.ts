@@ -4,7 +4,7 @@ export default defineConfig({
 	entry: ['src/index.js'],
 	format: ['esm', 'cjs'],
 	dts: false,
-	splitting: true,
+	splitting: false,
 	clean: true,
 	jsx: true,
 	external: [
