@@ -2,6 +2,8 @@
 import React from 'react';
 import { AdvancedRefArray } from '@liiift-studio/sanity-advanced-reference-array';
 import { RegenerateSubfamiliesComponent } from '../components/RegenerateSubfamiliesComponent.jsx';
+import { GenerateCollectionsPairsComponent } from '../components/GenerateCollectionsPairsComponent.jsx';
+import { PrimaryCollectionGeneratorTypeface } from '../components/PrimaryCollectionGeneratorTypeface.jsx';
 
 // Returns extra GROQ params scoped to the current typeface document
 const typefaceParams = (doc) => ({ typefaceName: doc?.title || '' });
@@ -93,6 +95,8 @@ export function createStylesField({
 	subfamilyFontFilter = false,
 	subfamilyPreview = false,
 	pairs = true,
+	generateCollections = false,
+	generateFullFamilyCollection = false,
 } = {}) {
 
 	const subfamilyFields = [
@@ -236,6 +240,22 @@ export function createStylesField({
 			type: 'array',
 			of: [subfamilyItem],
 		},
+		...field(generateCollections, {
+			title: 'Generate Collections and Pairs',
+			name: 'generateCollections',
+			type: 'string',
+			description: "Generate Collections and Pairs from the typeface's fonts.",
+			components: { input: GenerateCollectionsPairsComponent },
+			hidden: ({ parent }) => !parent?.fonts?.length,
+		}),
+		...field(generateFullFamilyCollection, {
+			title: 'Generate Full Family Collection',
+			name: 'generateCollectionGroup',
+			type: 'string',
+			description: 'Generate a Collection that includes all styles from this typeface.',
+			components: { input: PrimaryCollectionGeneratorTypeface },
+			hidden: ({ parent }) => !parent?.fonts?.length,
+		}),
 		{
 			title: 'Collections',
 			name: 'collections',
