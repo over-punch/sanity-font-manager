@@ -479,7 +479,7 @@ export const SingleUploaderTool = (props) => {
 							{formatUpper}
 						</Text>
 						{hasFile ? (
-							<Box style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+							<Box style={{ flex: 1, minWidth: 0 }}>
 								<a href={fileUrl} target="_blank" rel="noreferrer">{filenames?.[format] || 'File'}</a>
 							</Box>
 						) : (
@@ -520,7 +520,7 @@ export const SingleUploaderTool = (props) => {
 							{label}
 						</Text>
 						{hasFile ? (
-							<Box style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+							<Box style={{ flex: 1, minWidth: 0 }}>
 								<a href={fileUrl} target="_blank" rel="noreferrer">{filename || 'File'}</a>
 							</Box>
 						) : (
@@ -561,7 +561,7 @@ export const SingleUploaderTool = (props) => {
 							CSS
 						</Text>
 						{hasFile ? (
-							<Box style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+							<Box style={{ flex: 1, minWidth: 0 }}>
 								<a href={fileUrl} target="_blank" rel="noreferrer">{filenames?.css || 'File'}</a>
 							</Box>
 						) : (

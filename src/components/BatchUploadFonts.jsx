@@ -459,7 +459,7 @@ export const BatchUploadFonts = () => {
 										>
 											{ext}
 										</Text>
-										<Box style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+										<Box style={{ flex: 1, minWidth: 0 }}>
 											<Text size={1}>{file.name}</Text>
 										</Box>
 									</Flex>

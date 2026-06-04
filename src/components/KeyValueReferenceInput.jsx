@@ -148,72 +148,80 @@ export function KeyValueReferenceInput(props) {
 			<Box>
 				<Stack space={2}>
 					{pairs.map((pair, index) => (
-						<Box key={index} style={{ position: 'relative' }}>
+						<Flex key={index} gap={1} align="center">
 							{/* Reorder buttons */}
-							<div style={{ position: 'absolute', height: '100%', top: '0', left: '-5px', width: 'min-content', transform: 'translate(-100%, 0%)' }}>
-								<button className="manualButton manualButtonUp" style={{ fontSize: '15px', height: '50%' }} onClick={() => handleMoveUp(index)}>
-									<ArrowUpIcon />
-								</button>
-								<button className="manualButton manualButtonDown" style={{ fontSize: '15px', height: '50%' }} onClick={() => handleMoveDown(index)}>
-									<ArrowDownIcon />
-								</button>
-							</div>
-
-							<Flex gap={2} align="flex-start">
-								{/* Key input */}
-								<Box flex={1}>
-									<TextInput
-										value={pair.key}
-										onChange={(e) => handlePairChange(index, 'key', e.target.value)}
-										placeholder={keyPlaceholder}
-									/>
-								</Box>
-
-								{/* Reference display or empty-state picker trigger */}
-								<Box flex={1} style={{ minHeight: '100%' }}>
-									{pair.value?._ref ? (
-										<Card className="referenceCard" radius={2} tone="primary" style={{ paddingLeft: '1rem', height: 'fit-content' }}>
-											<Flex align="center" justify="space-between">
-												<Text
-													size={2}
-													style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '90%' }}
-												>
-													{referenceData[pair.value._ref] || 'Loading...'}
-												</Text>
-												<MenuButton
-													button={<Button icon={EllipsisHorizontalIcon} mode="bleed" title="Options" />}
-													id={`ref-options-${index}`}
-													menu={
-														<Menu>
-															<MenuItem tone="critical" icon={TrashIcon} text="Remove" onClick={() => handlePairChange(index, 'value', null)} />
-															<MenuItem icon={SyncIcon} text="Replace" onClick={() => openReferenceSelector(index)} />
-														</Menu>
-													}
-													popover={{ portal: true, tone: 'default', placement: 'left' }}
-												/>
-											</Flex>
-										</Card>
-									) : (
-										<Box
-											padding={2}
-											style={{ minHeight: '100%', border: '1px dashed #ccc', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-											onClick={() => openReferenceSelector(index)}
-										>
-											<Text muted size={2}>Click to select a {pickerLabel}</Text>
-										</Box>
-									)}
-								</Box>
+							<Flex direction="column" style={{ flexShrink: 0 }}>
+								<Button
+									mode="bleed"
+									icon={ArrowUpIcon}
+									padding={1}
+									fontSize={0}
+									onClick={() => handleMoveUp(index)}
+									disabled={index === 0}
+									style={{ cursor: index === 0 ? 'default' : 'pointer' }}
+								/>
+								<Button
+									mode="bleed"
+									icon={ArrowDownIcon}
+									padding={1}
+									fontSize={0}
+									onClick={() => handleMoveDown(index)}
+									disabled={index === pairs.length - 1}
+									style={{ cursor: index === pairs.length - 1 ? 'default' : 'pointer' }}
+								/>
 							</Flex>
 
+							{/* Key input */}
+							<Box flex={1}>
+								<TextInput
+									value={pair.key}
+									onChange={(e) => handlePairChange(index, 'key', e.target.value)}
+									placeholder={keyPlaceholder}
+								/>
+							</Box>
+
+							{/* Reference display or empty-state picker trigger */}
+							<Box flex={1}>
+								{pair.value?._ref ? (
+									<Card radius={2} tone="primary" style={{ paddingLeft: '0.75rem', height: 'fit-content' }}>
+										<Flex align="center" justify="space-between">
+											<Text size={2} style={{ whiteSpace: 'nowrap' }}>
+												{referenceData[pair.value._ref] || 'Loading...'}
+											</Text>
+											<MenuButton
+												button={<Button icon={EllipsisHorizontalIcon} mode="bleed" title="Options" />}
+												id={`ref-options-${index}`}
+												menu={
+													<Menu>
+														<MenuItem tone="critical" icon={TrashIcon} text="Remove" onClick={() => handlePairChange(index, 'value', null)} />
+														<MenuItem icon={SyncIcon} text="Replace" onClick={() => openReferenceSelector(index)} />
+													</Menu>
+												}
+												popover={{ portal: true, tone: 'default', placement: 'left' }}
+											/>
+										</Flex>
+									</Card>
+								) : (
+									<Box
+										padding={2}
+										style={{ border: '1px dashed #ccc', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+										onClick={() => openReferenceSelector(index)}
+									>
+										<Text muted size={2}>Click to select a {pickerLabel}</Text>
+									</Box>
+								)}
+							</Box>
+
 							{/* Remove button */}
-							<button
-								className="manualButton"
+							<Button
+								mode="bleed"
+								tone="critical"
+								icon={TrashIcon}
+								padding={2}
 								onClick={() => handleRemovePair(index)}
-								style={{ position: 'absolute', top: '0', right: '-7px', transform: 'translate(100%, 0%)' }}
-							>
-								<TrashIcon />
-							</button>
-						</Box>
+								style={{ flexShrink: 0, cursor: 'pointer' }}
+							/>
+						</Flex>
 					))}
 				</Stack>
 			</Box>
