@@ -1,26 +1,22 @@
 // Async font parser — wraps lib-font event model in a Promise with decompressor bootstrap
 
-import pako from 'pako';
-
-// Set decompressor globals BEFORE lib-font is imported.
-// lib-font reads globalThis.pako and globalThis.unbrotli at module evaluation time
-// (top of woff.js / woff2.js), not at parse time. These must be set before lib-font
-// is first evaluated, so we use dynamic import() below to guarantee ordering.
-globalThis.pako = pako;
-
-// unbrotli is a UMD that sets globalThis.unbrotli as a side effect on evaluation.
-// We vendor it from lib-font/lib/unbrotli.js because the subpath is not in
-// lib-font's exports map (ERR_PACKAGE_PATH_NOT_EXPORTED).
-import '../vendor/unbrotli.js';
-
 // Lazy-loaded lib-font Font constructor — resolved on first parseFont() call.
-// Using dynamic import() guarantees globalThis.pako and globalThis.unbrotli are
-// set before lib-font evaluates, which static imports cannot guarantee in ESM.
+// All decompressor globals (pako for WOFF, unbrotli for WOFF2) are set dynamically
+// inside getFont() BEFORE lib-font is imported, guaranteeing correct evaluation order
+// regardless of how the bundler (tsup/esbuild/vite) reorders static imports.
 let _Font = null;
 
-/** Returns the lib-font Font constructor, loading it on first call */
+/** Returns the lib-font Font constructor, bootstrapping decompressors on first call */
 async function getFont() {
 	if (!_Font) {
+		// Set pako (zlib) for WOFF decompression
+		const pako = await import('pako');
+		globalThis.pako = pako.default || pako;
+
+		// Set unbrotli for WOFF2 decompression — UMD side-effect sets globalThis.unbrotli
+		await import('../vendor/unbrotli.js');
+
+		// NOW safe to import lib-font — both globals are set
 		const mod = await import('lib-font');
 		_Font = mod.Font;
 	}
