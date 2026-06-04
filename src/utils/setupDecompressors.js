@@ -1,10 +1,9 @@
 // Sets up globalThis.pako and globalThis.unbrotli for lib-font WOFF/WOFF2 decompression.
-// This module MUST be imported before lib-font is ever evaluated.
-// It runs synchronously at module evaluation time to set the globals.
+// Must be imported before lib-font. The unbrotli vendor UMD exports via module.exports
+// in bundler environments (not globalThis), so we import the default export and set it manually.
 
 import pako from 'pako';
-import '../vendor/unbrotli.js';
+import unbrotli from '../vendor/unbrotli.js';
 
 globalThis.pako = pako;
-// unbrotli.js is a UMD that sets globalThis.unbrotli as a side effect on evaluation.
-// The import above triggers that side effect.
+globalThis.unbrotli = unbrotli;
