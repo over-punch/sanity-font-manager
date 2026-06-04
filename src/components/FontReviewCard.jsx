@@ -15,9 +15,10 @@ const EXTENDED_TYPES = ['eot', 'svg', 'css', 'woff2_subset', 'woff2_web'];
  * Collapsible review card for a single font in the upload plan.
  * Table-style header row with weight/style/files/action columns.
  */
-const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded }) {
+const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded, typefaceTitle, price }) {
 	const [expanded, setExpanded] = useState(false);
 	const [showAllFileTypes, setShowAllFileTypes] = useState(false);
+	const [showDocPreview, setShowDocPreview] = useState(false);
 
 	// Sync with allExpanded toggle from BulkActions
 	useEffect(() => {
@@ -381,6 +382,45 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 							tempId={entry.tempId}
 							dispatch={dispatch}
 						/>
+
+						{/* Document Preview — expandable view of all fields that will be written */}
+						<Stack space={2}>
+							<Button
+								mode="bleed"
+								fontSize={0}
+								padding={1}
+								text={showDocPreview ? 'Hide document preview' : 'Show document preview'}
+								onClick={() => setShowDocPreview(v => !v)}
+								style={{ cursor: 'pointer', alignSelf: 'flex-start' }}
+							/>
+							{showDocPreview && (
+								<Card border padding={3} radius={1} style={{ fontFamily: 'monospace', fontSize: 12 }}>
+									<Stack space={2}>
+										{[
+											['_id', entry.documentId],
+											['_type', 'font'],
+											['title', entry.title],
+											['slug', entry.documentId],
+											['typefaceName', typefaceTitle || '—'],
+											['weightName', entry.weightName || '—'],
+											['weight', entry.weight],
+											['style', entry.style],
+											['subfamily', entry.subfamily || '—'],
+											['variableFont', String(entry.variableFont)],
+											['price', price ?? '—'],
+											['sell', price > 0 ? 'true' : 'false'],
+											['normalWeight', 'true'],
+											['files', (entry.files || []).map(f => f.name).join(', ') || '—'],
+										].map(([key, value]) => (
+											<Flex key={key} gap={2}>
+												<Text size={0} muted style={{ width: 120, flexShrink: 0 }}>{key}</Text>
+												<Text size={0} style={{ wordBreak: 'break-all' }}>{String(value)}</Text>
+											</Flex>
+										))}
+									</Stack>
+								</Card>
+							)}
+						</Stack>
 
 						{/* Actions — only show reset if user has overridden suggestions */}
 						<Flex justify="flex-end" gap={2}>

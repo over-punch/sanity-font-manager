@@ -57,6 +57,7 @@ export async function buildUploadPlan({
 	onProgress,
 }) {
 	const plan = createEmptyPlan(settings);
+	plan.settings.typefaceTitle = typefaceTitle;
 	plan.phase = PLAN_PHASE.PROCESSING;
 	plan.processingProgress.total = files.length;
 

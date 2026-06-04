@@ -38,9 +38,22 @@ export const updateTypefaceDocument = async (
 
 	// Use dot-path keys so .set() does not clobber sibling fields
 	// (styles.collections, styles.pairs, styles.free, styles.displayStyles)
+	// Deduplicate by _ref to prevent duplicate entries on re-upload
+	const dedupeRefs = (existing, incoming) => {
+		const merged = [...(existing || [])];
+		const existingRefs = new Set(merged.map(r => r._ref).filter(Boolean));
+		incoming.forEach(ref => {
+			if (ref._ref && !existingRefs.has(ref._ref)) {
+				merged.push(ref);
+				existingRefs.add(ref._ref);
+			}
+		});
+		return merged;
+	};
+
 	let patch = {
-		'styles.fonts': stylesObject.fonts ? [...stylesObject.fonts, ...fontRefs] : [...fontRefs],
-		'styles.variableFont': stylesObject?.variableFont ? [...stylesObject.variableFont, ...variableRefs] : [...variableRefs],
+		'styles.fonts': dedupeRefs(stylesObject.fonts, fontRefs),
+		'styles.variableFont': dedupeRefs(stylesObject?.variableFont, variableRefs),
 	};
 
 	setStatus('Organising font subfamilies...');

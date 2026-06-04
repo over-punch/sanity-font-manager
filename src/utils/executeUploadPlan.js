@@ -327,9 +327,7 @@ async function executeSingleFont({ entry, plan, client, progress, onProgress }) 
 		_key: nanoid(),
 		title: entry.title,
 		slug: { _type: 'slug', current: fontDocId },
-		typefaceName: plan.fonts[entry.tempId]?.decisions?.title?.original
-			? entry.title.split(' ').slice(0, -1).join(' ') || entry.title
-			: entry.title,
+		typefaceName: plan.settings.typefaceTitle || entry.title,
 		style: entry.style,
 		variableFont: entry.variableFont,
 		weightName: entry.weightName,
@@ -340,11 +338,6 @@ async function executeSingleFont({ entry, plan, client, progress, onProgress }) 
 		normalWeight: true,
 		fileInput,
 	};
-
-	// Set typefaceName from the typeface title, not derived from font title
-	fontDoc.typefaceName = Object.values(plan.fonts)[0]?.decisions?.title?.original
-		? plan.settings.typefaceTitle || fontDoc.typefaceName
-		: fontDoc.typefaceName;
 
 	// Add metadata fields if available
 	if (entry.metaData) fontDoc.metaData = entry.metaData;

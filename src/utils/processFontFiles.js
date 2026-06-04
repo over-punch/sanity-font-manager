@@ -168,15 +168,16 @@ export const extractFontMetadata = (font, title, weightKeywordList, italicKeywor
 
 	const fullName = getNameString(font, 4) || ttfFallbackMeta?.fullName || '';
 
-	if ((weightName === '' || weightName.toLowerCase() === 'roman') && fullName) {
+	const axes = getVariationAxes(font);
+	const variableFont = axes !== null;
+
+	// For non-VF fonts, fall back to extracting weight from fullName when weightName is empty
+	if (!variableFont && (weightName === '' || weightName.toLowerCase() === 'roman') && fullName) {
 		weightName = extractWeightFromFullName(font, title, ttfFallbackMeta);
 		if (!preserveShortenedNames) {
 			weightName = expandAbbreviations(weightName);
 		}
 	}
-
-	const axes = getVariationAxes(font);
-	const variableFont = axes !== null;
 
 	// Subfamily detection — extract width/optical variant from name table.
 	// Primary: nameId4 (fullName) minus typeface title — the most complete name record,

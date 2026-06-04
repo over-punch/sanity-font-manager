@@ -1,4 +1,4 @@
-// Upload modal — 3-step state machine: Settings → Review → Execute
+// Upload modal — multi-step state machine: Upload Files → Review → Execute → Map Instances → Summary
 
 import React, { useReducer, useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import { Dialog, Box, Flex, Text, Badge, Button } from '@sanity/ui';
@@ -9,6 +9,7 @@ import { generateStyleKeywords } from '../utils/generateKeywords';
 import UploadStep1Settings from './UploadStep1Settings';
 import UploadStep2Review from './UploadStep2Review';
 import UploadStep3Execute from './UploadStep3Execute';
+import UploadStep3bInstances from './UploadStep3bInstances';
 import UploadSummary from './UploadSummary';
 
 /** Step labels for the step indicator */
@@ -16,6 +17,7 @@ const STEPS = [
 	{ key: 1, label: 'Upload Files' },
 	{ key: 2, label: 'Review' },
 	{ key: 3, label: 'Upload' },
+	{ key: 4, label: 'Map Instances' },
 ];
 
 /** Maps plan phase to active step number */
@@ -49,11 +51,19 @@ export default function UploadModal({
 	const [processingCancelled, setProcessingCancelled] = useState(false);
 	const [executionResult, setExecutionResult] = useState(null);
 	const [retryTempIds, setRetryTempIds] = useState(null);
+	const [instanceMappingPhase, setInstanceMappingPhase] = useState(false);
+	const [instanceMappingResult, setInstanceMappingResult] = useState(null);
 	const cancelRef = useRef(false);
 	const focusRef = useRef(null);
 
 	const { weightKeywordList, italicKeywordList } = useMemo(() => generateStyleKeywords(), []);
-	const currentStep = phaseToStep(plan.phase);
+	const hasVFs = useMemo(() =>
+		Object.values(plan.fonts).some(f => f.variableFont && f.status !== 'error'),
+		[plan.fonts]
+	);
+	const baseStep = phaseToStep(plan.phase);
+	// Instance mapping is step 4 — only shown after execution completes with VFs
+	const currentStep = instanceMappingPhase ? 4 : (plan.phase === PLAN_PHASE.COMPLETE && !instanceMappingResult ? baseStep : baseStep);
 	const isExecuting = plan.phase === PLAN_PHASE.EXECUTING;
 
 	// Prevent accidental close during upload
@@ -85,7 +95,7 @@ export default function UploadModal({
 
 	/** Start processing — transition to Step 2 and build the plan */
 	const handleStartProcessing = useCallback(async (files, settings) => {
-		dispatch({ type: 'SET_SETTINGS', settings });
+		dispatch({ type: 'SET_SETTINGS', settings: { ...settings, typefaceTitle } });
 		dispatch({ type: 'SET_PHASE', phase: PLAN_PHASE.PROCESSING, totalFiles: files.length });
 		cancelRef.current = false;
 		setProcessingCancelled(false);
@@ -135,10 +145,22 @@ export default function UploadModal({
 		dispatch({ type: 'SET_PHASE', phase: PLAN_PHASE.EXECUTING });
 	}, []);
 
-	/** Receive execution result and mark complete */
+	/** Receive execution result — transition to instance mapping if VFs exist, otherwise complete */
 	const handleExecutionComplete = useCallback((result) => {
 		setExecutionResult(result);
-		dispatch({ type: 'SET_PHASE', phase: PLAN_PHASE.COMPLETE });
+		if (hasVFs && result.success !== false) {
+			// Show instance mapping step before summary
+			setInstanceMappingPhase(true);
+			dispatch({ type: 'SET_PHASE', phase: PLAN_PHASE.COMPLETE });
+		} else {
+			dispatch({ type: 'SET_PHASE', phase: PLAN_PHASE.COMPLETE });
+		}
+	}, [hasVFs]);
+
+	/** Handle instance mapping completion */
+	const handleInstanceMappingComplete = useCallback((result) => {
+		setInstanceMappingResult(result);
+		setInstanceMappingPhase(false);
 	}, []);
 
 	if (!open) return null;
@@ -163,7 +185,7 @@ export default function UploadModal({
 				<Flex direction="column" gap={3} style={{ width: '100%' }}>
 					<Text weight="semibold" size={2}>Upload Fonts</Text>
 					<Flex gap={1} style={{ width: '100%' }}>
-						{STEPS.map((step, i) => {
+						{STEPS.filter(step => step.key !== 4 || hasVFs).map((step, i) => {
 							const isActive = currentStep === step.key;
 							const isCompleted = currentStep > step.key;
 							const isClickable = !isExecuting && step.key < currentStep;
@@ -245,15 +267,29 @@ export default function UploadModal({
 					/>
 				)}
 
+				{/* Step 4: Variable Font Instance Mapping (only if VFs in batch) */}
+				{plan.phase === PLAN_PHASE.COMPLETE && instanceMappingPhase && (
+					<UploadStep3bInstances
+						plan={plan}
+						executionResult={executionResult}
+						client={client}
+						typefaceTitle={typefaceTitle}
+						onComplete={handleInstanceMappingComplete}
+					/>
+				)}
+
 				{/* Post-completion Summary */}
-				{plan.phase === PLAN_PHASE.COMPLETE && (
+				{plan.phase === PLAN_PHASE.COMPLETE && !instanceMappingPhase && (
 					<UploadSummary
 						plan={plan}
 						result={executionResult}
+						instanceMappingResult={instanceMappingResult}
 						onClose={handleClose}
 						onRetry={(failedTempIds) => {
 							setRetryTempIds(failedTempIds || null);
 							setExecutionResult(null);
+							setInstanceMappingPhase(false);
+							setInstanceMappingResult(null);
 							dispatch({ type: 'SET_PHASE', phase: PLAN_PHASE.EXECUTING });
 						}}
 						client={client}

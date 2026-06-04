@@ -431,6 +431,8 @@ export default function UploadStep2Review({
 								entry={entry}
 								dispatch={dispatch}
 								allExpanded={allExpanded}
+								typefaceTitle={plan.settings?.typefaceTitle}
+								price={plan.settings?.price}
 							/>
 						))}
 					</Stack>
