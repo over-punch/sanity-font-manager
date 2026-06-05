@@ -106,7 +106,7 @@ export {
 } from './utils/fontHelpers.js';
 
 // Schema field definitions
-export { openTypeField } from './schema/openTypeField.js';
+export { openTypeField, createOpenTypeField } from './schema/openTypeField.js';
 export { styleCountField } from './schema/styleCountField.js';
 export { stylisticSetField } from './schema/stylisticSetField.js';
 export { createStylesField } from './schema/stylesField.js';

@@ -1943,3 +1943,53 @@ export const openTypeField = {
 
 	],
 };
+
+/**
+ * Factory function to create a customised OpenType field.
+ * The static `openTypeField` export remains unchanged for backwards compatibility.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.customText=false] - Unhide the customText field on each feature
+ * @param {'string'|'code'} [options.customTextType='string'] - Type for customText field.
+ *   Use 'code' for an HTML code editor (requires @sanity/code-input plugin).
+ * @returns {object} Sanity field definition
+ */
+export function createOpenTypeField({
+	customText = false,
+	customTextType = 'string',
+} = {}) {
+	if (!customText) return { ...openTypeField };
+
+	// Deep clone fields and unhide/retype customText on each feature object
+	const fields = openTypeField.fields.map(field => {
+		// Skip the top-level 'features' checkbox array
+		if (field.type !== 'object' || !field.fields) return field;
+
+		const updatedSubfields = field.fields.map(subfield => {
+			if (subfield.name !== 'customText') return subfield;
+
+			const updated = { ...subfield, hidden: false };
+
+			if (customTextType === 'code') {
+				updated.type = 'code';
+				updated.options = {
+					language: 'html',
+					languageAlternatives: [
+						{ title: 'HTML', value: 'html' },
+					],
+					withFilename: false,
+				};
+				updated.description = 'Use the field below to input custom text to highlight the feature. Wrap featured characters in <span class="bold">CHARACTER</span>.';
+			}
+
+			return updated;
+		});
+
+		return { ...field, fields: updatedSubfields };
+	});
+
+	return {
+		...openTypeField,
+		fields,
+	};
+}
