@@ -194,15 +194,17 @@ export const SingleUploaderTool = (props) => {
 			const arrayBuffer = await (await fetch(ttfAsset.url)).arrayBuffer();
 			const font = await parseFont(arrayBuffer, `${doc_id}.ttf`);
 
-			const { weightName, subfamilyName, style, variableFont } = extractFontMetadata(
+			const { weightName, subfamilyName, fontTitle, style, variableFont } = extractFontMetadata(
 				font,
 				doc_typefaceName,
 				weightKeywordList,
 				italicKeywordList,
+				false,
+				null,
 			);
 			const weight = determineWeight(font, weightName);
 
-			await client.patch(doc_id).set({ weightName, subfamily: subfamilyName, style, variableFont, weight }).commit();
+			await client.patch(doc_id).set({ title: fontTitle, weightName, subfamily: subfamilyName, style, variableFont, weight }).commit();
 
 			const fontData = await generateFontData({
 				url: ttfAsset.url,
@@ -349,12 +351,12 @@ export const SingleUploaderTool = (props) => {
 			if (code === 'ttf') {
 				const fontBuffer = await readFontFile(file);
 				const font = await parseFont(fontBuffer, file.name);
-				const { weightName, subfamilyName, style, variableFont } = extractFontMetadata(
-					font, doc_typefaceName, weightKeywordList, italicKeywordList
+				const { weightName, subfamilyName, fontTitle, style, variableFont } = extractFontMetadata(
+					font, doc_typefaceName, weightKeywordList, italicKeywordList, false, null
 				);
 				const weight = determineWeight(font, weightName);
 				const normalizedId = doc_id.startsWith('drafts.') ? doc_id.replace('drafts.', '') : doc_id;
-				await client.patch(normalizedId).set({ weightName, subfamily: subfamilyName, style, variableFont, weight }).commit();
+				await client.patch(normalizedId).set({ title: fontTitle, weightName, subfamily: subfamilyName, style, variableFont, weight }).commit();
 			}
 
 			onChange(set(newFileInput));
