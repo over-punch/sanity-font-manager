@@ -4,6 +4,17 @@ import { AdvancedRefArray } from '@liiift-studio/sanity-advanced-reference-array
 import { RegenerateSubfamiliesComponent } from '../components/RegenerateSubfamiliesComponent.jsx';
 import { GenerateCollectionsPairsComponent } from '../components/GenerateCollectionsPairsComponent.jsx';
 import { PrimaryCollectionGeneratorTypeface } from '../components/PrimaryCollectionGeneratorTypeface.jsx';
+import { StyleCountInput } from '../components/StyleCountInput.jsx';
+
+// Inline style count field — injected into the styles object when styleCount option is true
+const inlineStyleCountField = {
+	name: 'styleCount',
+	type: 'number',
+	components: {
+		input: StyleCountInput,
+	},
+	readOnly: true,
+};
 
 // Returns extra GROQ params scoped to the current typeface document
 const typefaceParams = (doc) => ({ typefaceName: doc?.title || '' });
@@ -80,6 +91,7 @@ const subfamilyPreferredStyleFilter = async ({ getClient, document, parent }) =>
  * @param {boolean} [options.subfamilyFontFilter=false] - Filter subfamily font picker to typeface fonts only
  * @param {boolean} [options.subfamilyPreview=false] - Include preview on subfamily array items
  * @param {boolean} [options.pairs=true] - Show pairs array to editors
+ * @param {boolean} [options.styleCount=false] - Include style count display above fonts array
  */
 export function createStylesField({
 	free = false,
@@ -97,6 +109,7 @@ export function createStylesField({
 	pairs = true,
 	generateCollections = false,
 	generateFullFamilyCollection = false,
+	styleCount = false,
 } = {}) {
 
 	const subfamilyFields = [
@@ -199,6 +212,7 @@ export function createStylesField({
 			initialValue: false,
 			description: 'Check if this typeface includes serif letterforms. Used for typeface overview serif/sans filters. Frontend automatically treats non-serif typefaces as sans serif.',
 		}),
+		...field(styleCount, inlineStyleCountField),
 		{
 			title: 'Fonts',
 			name: 'fonts',
