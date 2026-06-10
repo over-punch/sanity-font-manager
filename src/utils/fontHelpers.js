@@ -80,7 +80,19 @@ export function getCharacterSet(font) {
 	const cmap = font.opentype?.tables?.cmap;
 	if (!cmap) return [];
 	try {
-		return cmap.getSupportedCharCodes(3, 1);
+		const raw = cmap.getSupportedCharCodes(3, 1);
+		if (!Array.isArray(raw) || raw.length === 0) return [];
+		// getSupportedCharCodes may return range objects { start, end } — expand to individual codepoints
+		if (typeof raw[0] === 'object' && raw[0].start !== undefined) {
+			const codes = [];
+			for (const range of raw) {
+				for (let i = range.start; i <= range.end; i++) {
+					codes.push(i);
+				}
+			}
+			return codes;
+		}
+		return raw;
 	} catch {
 		return [];
 	}
