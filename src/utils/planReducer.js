@@ -2,6 +2,7 @@
 
 import { PLAN_PHASE, FONT_STATUS, PROCESSING_OWNED_FIELDS } from './planTypes';
 import { sanitizeForSanityId } from './sanitizeForSanityId';
+import { retitleAllFonts } from './retitleFontEntries';
 
 /** Valid phase transitions — any phase can transition to 'idle' (reset) */
 const VALID_TRANSITIONS = {
@@ -57,7 +58,20 @@ export function planReducer(state, action) {
 				console.warn('SET_SETTINGS blocked — settings locked during processing/execution');
 				return state;
 			}
-			return { ...state, settings: { ...state.settings, ...action.settings } };
+			const newSettings = { ...state.settings, ...action.settings };
+			let newState = { ...state, settings: newSettings };
+
+			// Retitle fonts when preserveShortenedNames changes during review
+			const shortenedChanged = 'preserveShortenedNames' in action.settings
+				&& action.settings.preserveShortenedNames !== state.settings.preserveShortenedNames;
+			if (shortenedChanged && Object.keys(state.fonts).length > 0) {
+				const typefaceTitle = action.typefaceTitle || state.settings.typefaceTitle || '';
+				const retitled = retitleAllFonts(state.fonts, newSettings.preserveShortenedNames, typefaceTitle);
+				const subfamilyGroups = rebuildSubfamilyGroups(retitled);
+				newState = { ...newState, fonts: retitled, subfamilyGroups };
+			}
+
+			return newState;
 		}
 
 		// ---------------------------------------------------------------

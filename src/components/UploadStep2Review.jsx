@@ -313,7 +313,11 @@ export default function UploadStep2Review({
 										checked={localPreserveShortenedNames}
 										onChange={(e) => {
 											setLocalPreserveShortenedNames(e.target.checked);
-											dispatch({ type: 'SET_SETTINGS', settings: { preserveShortenedNames: e.target.checked } });
+											dispatch({
+												type: 'SET_SETTINGS',
+												settings: { preserveShortenedNames: e.target.checked },
+												typefaceTitle: plan.settings?.typefaceTitle || '',
+											});
 										}}
 									/>
 									<Tooltip

@@ -29,6 +29,11 @@ export function KeyValueReferenceInput(props) {
 	const sanityClient = useSanityClient();
 	const formDocument = useFormValue([]);
 
+	/** Syncs local pairs state when the value prop changes externally (e.g. autofill from parent) */
+	useEffect(() => {
+		setPairs(value);
+	}, [value]);
+
 	/** Fetches and caches display titles for all referenced documents whenever pairs change */
 	useEffect(() => {
 		const refIds = pairs.filter(p => p.value?._ref).map(p => p.value._ref);
