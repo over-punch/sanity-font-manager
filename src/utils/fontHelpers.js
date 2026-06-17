@@ -187,6 +187,8 @@ export function getFontMetadata(font) {
 		fullName: getNameString(font, 4),
 		familyName: getNameString(font, 1),
 		subfamilyName: getNameString(font, 2),
+		preferredFamily: getNameString(font, 16),
+		preferredSubfamily: getNameString(font, 17),
 		copyright: getNameString(font, 0),
 		version: getNameString(font, 5),
 		genDate: new Date().toISOString(),
