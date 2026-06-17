@@ -30,13 +30,14 @@ const formatElapsed = (s) => {
 	return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
 };
 
-export const BatchUploadFonts = () => {
+export const BatchUploadFonts = (props) => {
+	const defaults = props?.schemaType?.options?.defaults || {};
 	const [status, setStatus] = useState('ready');
 	const [ready, setReady] = useState(true);
-	const [inputPrice, setInputPrice] = useState('0');
+	const [inputPrice, setInputPrice] = useState(String(defaults.price ?? '0'));
 	const [error, setError] = useState(false);
-	const [preserveShortenedNames, setPreserveShortenedNames] = useState(true);
-	const [preserveFileNames, setPreserveFileNames] = useState(false);
+	const [preserveShortenedNames, setPreserveShortenedNames] = useState(defaults.preserveShortenedNames ?? true);
+	const [preserveFileNames, setPreserveFileNames] = useState(defaults.preserveFileNames ?? false);
 	const [showUtilities, setShowUtilities] = useState(false);
 	const [pendingFiles, setPendingFiles] = useState([]);
 	const [isDragging, setIsDragging] = useState(false);
@@ -587,6 +588,7 @@ export const BatchUploadFonts = () => {
 								stylesObject={stylesObject}
 								preferredStyleRef={preferredStyleRef}
 								slug={slug}
+								defaults={defaults}
 							/>
 						</Suspense>
 					)}

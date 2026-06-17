@@ -46,8 +46,13 @@ export default function UploadModal({
 	stylesObject,
 	preferredStyleRef,
 	slug,
+	defaults = {},
 }) {
-	const [plan, dispatch] = useReducer(planReducer, null, () => createEmptyPlan());
+	const [plan, dispatch] = useReducer(planReducer, null, () => createEmptyPlan({
+		price: defaults.price ?? 0,
+		preserveShortenedNames: defaults.preserveShortenedNames ?? false,
+		preserveFileNames: defaults.preserveFileNames ?? false,
+	}));
 	const [processingCancelled, setProcessingCancelled] = useState(false);
 	const [executionResult, setExecutionResult] = useState(null);
 	const [retryTempIds, setRetryTempIds] = useState(null);
