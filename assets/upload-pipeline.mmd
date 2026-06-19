@@ -1,0 +1,32 @@
+%% Reproducible source for the upload-pipeline diagram embedded in README.md.
+%% Render locally with: npx -y @mermaid-js/mermaid-cli -i assets/upload-pipeline.mmd -o assets/upload-pipeline.svg
+%% GitHub renders the inline ```mermaid``` block in the README directly, so a rendered
+%% image is optional. Keep this source in sync with the README block when editing.
+flowchart TD
+    subgraph studio["Sanity Studio (typeface document)"]
+        BUF["BatchUploadFonts<br/>(schema input field)"]
+        BUF -->|opens| UM["UploadModal<br/>(lazy-loaded)"]
+    end
+
+    subgraph plan["Phase 1 — Plan (reads only)"]
+        UM --> S1["Step 1 · Upload Files<br/>UploadStep1Settings"]
+        S1 --> BUILD["buildUploadPlan()"]
+        BUILD --> PF["parseFont() · lib-font<br/>setupDecompressors → pako + unbrotli"]
+        PF --> FH["fontHelpers<br/>weight / style / axes / metrics"]
+        FH --> RES["resolveExistingFont()<br/>exact / candidate / create"]
+        RES --> S2["Step 2 · Review<br/>FontReviewCard · BulkActions · ExistingDocumentResolver"]
+    end
+
+    subgraph execute["Phase 2 — Execute (writes)"]
+        S2 -->|user confirms| EXEC["executeUploadPlan()<br/>concurrency = 3 · 429 backoff + jitter"]
+        EXEC --> UP["Upload assets<br/>ttf / otf / woff / woff2"]
+        UP --> CSS["generateCssFile()<br/>@font-face + VF descriptors"]
+        CSS --> META["generateFontData()<br/>metadata · metrics · glyphs · features"]
+        META --> DOC["Create / update font documents"]
+        DOC --> PATCH["Patch typeface styles.fonts"]
+        PATCH --> S3b["Step 3b · Map Instances<br/>UploadStep3bInstances (variable fonts)"]
+        S3b --> SUM["Summary<br/>UploadSummary"]
+    end
+
+    planReducer["planReducer (state machine)"] -.drives.-> plan
+    executionReducer["executionReducer (progress)"] -.drives.-> execute
