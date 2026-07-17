@@ -48,6 +48,15 @@ export const cedarsProfileField = {
 			fields: labelFields,
 		},
 		{
+			// Per-axis measurability: false means the axis could not be measured for
+			// this font (a 0 score is a placeholder, not a real low reading).
+			title: 'Availability',
+			name: 'availability',
+			type: 'object',
+			options: { collapsible: true, collapsed: true },
+			fields: AXES.map((key) => ({ title: titleCase(key), name: key, type: 'boolean' })),
+		},
+		{
 			title: '+ Descriptors',
 			name: 'plus',
 			type: 'object',
