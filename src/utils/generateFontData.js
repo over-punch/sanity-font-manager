@@ -1,6 +1,7 @@
 // Extracts metadata, metrics, glyph count, OpenType features, and variable axes from a font and optionally patches the Sanity font document
 
 import { parseFont } from './parseFont';
+import { computeCedarsProfile } from './computeCedarsProfile';
 import {
 	getFontMetadata,
 	getFontMetrics,
@@ -43,10 +44,12 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 	}
 
 	let font = fontKit;
+	// Hoisted so the CEDARS+ step below can reuse the raw bytes when we fetched them.
+	let fontBuffer = null;
 	if (!fontKit || fontKit == null) {
-		let buffer = await fetch(srcUrl);
-		buffer = await buffer.arrayBuffer();
-		font = await parseFont(buffer, `${fontId}.ttf`);
+		const res = await fetch(srcUrl);
+		fontBuffer = await res.arrayBuffer();
+		font = await parseFont(fontBuffer, `${fontId}.ttf`);
 	}
 
 	const variableAxes = getVariationAxes(font);
@@ -81,6 +84,19 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 		variableFont = true;
 	}
 
+	// CEDARS+ profile — best-effort enrichment. Wrapped so a failure here can never
+	// block the font upload; the raw bytes are fetched only if we don't already have them.
+	let cedarsPlus = null;
+	try {
+		if (!fontBuffer) {
+			const res = await fetch(srcUrl);
+			fontBuffer = await res.arrayBuffer();
+		}
+		cedarsPlus = computeCedarsProfile(fontBuffer);
+	} catch (err) {
+		console.warn('CEDARS profile computation failed:', err?.message || err);
+	}
+
 	let patch = {
 		metrics: metrics,
 		metaData: metaData,
@@ -90,6 +106,7 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 		glyphCount: glyphCount,
 		opentypeFeatures: { chars: opentypeFeatures },
 		characterSet: { chars: characterSet },
+		...(cedarsPlus ? { cedarsPlus } : {}),
 	};
 
 	console.log('Font data patch:', Object.keys(patch));
