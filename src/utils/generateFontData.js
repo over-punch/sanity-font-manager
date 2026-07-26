@@ -37,8 +37,13 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 
 	let srcUrl;
 	if (!url || url == null) {
-		srcUrl = await client.fetch(`*[_id == $id]{url}`, { id: fileInput.ttf.asset._ref });
-		srcUrl = srcUrl[0].url;
+		// Use the TTF asset if present, otherwise fall back to the OTF (OTF-only uploads have no .ttf).
+		const assetRef = fileInput.ttf?.asset?._ref || fileInput.otf?.asset?._ref;
+		const rows = await client.fetch(`*[_id == $id]{url}`, { id: assetRef });
+		if (!rows?.[0]?.url) {
+			throw new Error(`Font asset URL not found for ${fontId} (asset ${assetRef || 'missing'})`);
+		}
+		srcUrl = rows[0].url;
 	} else {
 		srcUrl = url;
 	}
@@ -79,10 +84,9 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 
 	const { metaData, metrics } = buildFontMetadata(font);
 
-	let variableFont = false;
-	if (variableAxes && variableInstances && Object.keys(variableInstances).length > 0) {
-		variableFont = true;
-	}
+	// A font with real variation axes IS variable, even if it ships no named instances. (getVariationAxes
+	// returns null when every axis is degenerate, so a non-null result means genuine axes.)
+	const variableFont = variableAxes != null && Object.keys(variableAxes).length > 0;
 
 	// CEDARS+ profile — best-effort enrichment. Wrapped so a failure here can never
 	// block the font upload; the raw bytes are fetched only if we don't already have them.

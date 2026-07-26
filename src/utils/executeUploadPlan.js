@@ -318,54 +318,72 @@ async function executeSingleFont({ entry, plan, client, progress, onProgress }) 
 	// Create or update font document
 	fontProgress.status = EXECUTION_STATUS.CREATING_DOCUMENT;
 
-	const fontDocId = shouldUpdate && existingDoc ? existingDoc._id : entry.documentId;
-	const isNew = !shouldUpdate;
+	// Resolution may have thrown (decision.lookupFailed) — then `shouldUpdate` is falsely false and a blind
+	// createOrReplace could DESTROY an existing document. Re-check existence before creating so we can never
+	// clobber; if the re-check also fails, skip this font rather than risk overwriting.
+	let target = existingDoc;
+	let treatAsUpdate = shouldUpdate && !!existingDoc;
+	if (!treatAsUpdate && decision.lookupFailed) {
+		try {
+			target = await client.fetch(
+				`*[_type == 'font' && (_id == $id || _id == $draftId || slug.current == $id)][0]{ _id, fileInput, metaData, metrics }`,
+				{ id: entry.documentId, draftId: `drafts.${entry.documentId}` }
+			);
+			if (target?._id) treatAsUpdate = true;
+		} catch (recheckErr) {
+			throw new Error(`Resolution failed and the existence re-check also failed for "${entry.title}" — skipped to avoid overwriting an existing document.`);
+		}
+	}
 
-	const fontDoc = {
-		_id: fontDocId,
-		_type: 'font',
-		_key: nanoid(),
-		title: entry.title,
-		slug: { _type: 'slug', current: fontDocId },
-		typefaceName: plan.settings.typefaceTitle || entry.title,
+	const fontDocId = treatAsUpdate && target ? target._id : entry.documentId;
+	const isNew = !treatAsUpdate;
+
+	// Parsed values a re-upload legitimately refreshes: the font files + everything derived from the binary.
+	const refreshFields = {
+		fileInput,
 		style: entry.style,
 		variableFont: entry.variableFont,
 		weightName: entry.weightName,
 		subfamily: entry.subfamily,
 		weight: entry.weight,
-		price: plan.settings.price,
-		sell: plan.settings.price > 0,
-		normalWeight: true,
-		fileInput,
 	};
-
-	// Add metadata fields if available
-	if (entry.metaData) fontDoc.metaData = entry.metaData;
-	if (entry.metrics) fontDoc.metrics = entry.metrics;
-	if (entry.variableAxes) fontDoc.variableAxes = entry.variableAxes;
-	if (entry.variableInstances) fontDoc.variableInstances = entry.variableInstances;
-	if (entry.opentypeFeatures) fontDoc.opentypeFeatures = entry.opentypeFeatures;
-	if (entry.characterSet) fontDoc.characterSet = entry.characterSet;
-	if (entry.glyphCount) fontDoc.glyphCount = entry.glyphCount;
+	if (entry.metaData) refreshFields.metaData = entry.metaData;
+	if (entry.metrics) refreshFields.metrics = entry.metrics;
+	if (entry.variableAxes) refreshFields.variableAxes = entry.variableAxes;
+	if (entry.variableInstances) refreshFields.variableInstances = entry.variableInstances;
+	if (entry.opentypeFeatures) refreshFields.opentypeFeatures = entry.opentypeFeatures;
+	if (entry.characterSet) refreshFields.characterSet = entry.characterSet;
+	if (entry.glyphCount) refreshFields.glyphCount = entry.glyphCount;
 
 	try {
-		if (shouldUpdate && existingDoc) {
-			// Merge with existing data
-			if (existingDoc.fileInput) {
-				Object.keys(existingDoc.fileInput).forEach(key => {
-					if (!fontDoc.fileInput[key]) fontDoc.fileInput[key] = existingDoc.fileInput[key];
+		if (treatAsUpdate && target) {
+			// Partial patch: only file/metadata fields change. Curator-owned fields (price, sell, slug, title,
+			// typefaceName, description, scriptFileInput, variableInstanceReferences) are NOT in the set, so
+			// `.set()` leaves them untouched — a re-upload of the binary can't reset a sold product's price/URL.
+			// Keep any font-file formats that weren't part of this re-upload; fall back to existing metadata.
+			if (target.fileInput) {
+				Object.keys(target.fileInput).forEach(key => {
+					if (!refreshFields.fileInput[key]) refreshFields.fileInput[key] = target.fileInput[key];
 				});
 			}
-			if (!fontDoc.metaData && existingDoc.metaData) fontDoc.metaData = existingDoc.metaData;
-			if (!fontDoc.metrics && existingDoc.metrics) fontDoc.metrics = existingDoc.metrics;
-			if (existingDoc.scriptFileInput) fontDoc.scriptFileInput = existingDoc.scriptFileInput;
-			if (existingDoc.variableInstanceReferences) {
-				fontDoc.variableInstanceReferences = existingDoc.variableInstanceReferences;
-			}
+			if (!refreshFields.metaData && target.metaData) refreshFields.metaData = target.metaData;
+			if (!refreshFields.metrics && target.metrics) refreshFields.metrics = target.metrics;
 
-			await client.patch(fontDocId).set(fontDoc).commit();
-			console.log('Updated existing font:', fontDocId, entry.title);
+			await client.patch(target._id).set(refreshFields).commit();
+			console.log('Updated existing font (files/metadata only):', target._id, entry.title);
 		} else {
+			// New document — set the full shape, including the curator-owned fields.
+			const fontDoc = {
+				_id: fontDocId,
+				_type: 'font',
+				title: entry.title,
+				slug: { _type: 'slug', current: fontDocId },
+				typefaceName: plan.settings.typefaceTitle || entry.title,
+				price: plan.settings.price,
+				sell: plan.settings.price > 0,
+				normalWeight: true,
+				...refreshFields,
+			};
 			await client.createOrReplace(fontDoc);
 			console.log('Created new font:', fontDocId, entry.title);
 		}
