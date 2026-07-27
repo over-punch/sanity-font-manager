@@ -181,9 +181,10 @@ export async function executeUploadPlan({
 
 /**
  * Executes upload for a single font entry.
+ * Exported for unit testing of the create-vs-update decision and the no-clobber patch.
  * @returns {Promise<{ ref: object, isNew: boolean }>}
  */
-async function executeSingleFont({ entry, plan, client, progress, onProgress }) {
+export async function executeSingleFont({ entry, plan, client, progress, onProgress }) {
 	const fontProgress = progress[entry.tempId];
 	fontProgress.status = EXECUTION_STATUS.UPLOADING_ASSETS;
 

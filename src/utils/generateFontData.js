@@ -29,6 +29,36 @@ export function buildFontMetadata(font) {
 	return { metaData, metrics };
 }
 
+/**
+ * Builds the keyed `variableInstances` object from a font's named instances.
+ * `inst.coordinates` are positional in FULL fvar axis order, but `variableAxes` has degenerate
+ * (min==max) axes dropped — so coordinates must be mapped by the full fvar axis list, NOT by
+ * Object.keys(variableAxes), or a pinned axis would shift every later value onto the wrong tag.
+ * @param {object} font - lib-font Font instance
+ * @param {object|null} variableAxes - non-degenerate axes keyed by tag (from getVariationAxes)
+ * @param {Array} namedInstances - named instances (from getNamedInstances)
+ * @returns {object|null} { [instanceName]: { [axisTag]: value } }, or null when not variable
+ */
+export function buildVariableInstances(font, variableAxes, namedInstances) {
+	if (!namedInstances || namedInstances.length === 0 || !variableAxes) return null;
+	const fvarAxes = font?.opentype?.tables?.fvar?.axes || [];
+	const out = {};
+	for (const inst of namedInstances) {
+		const key = inst.name || inst.postScriptName || 'Unknown';
+		const coord = {};
+		if (fvarAxes.length === inst.coordinates.length) {
+			fvarAxes.forEach((axis, index) => {
+				if (variableAxes[axis.tag]) coord[axis.tag] = inst.coordinates[index];
+			});
+		} else {
+			// Lengths disagree (unexpected) — fall back to positional over the kept axes.
+			Object.keys(variableAxes).forEach((tag, index) => { coord[tag] = inst.coordinates[index]; });
+		}
+		out[key] = coord;
+	}
+	return out;
+}
+
 export default async function generateFontData({ fileInput, url, fontKit, fontId, client, commit = true }) {
 	if (fontId.startsWith('drafts.')) {
 		fontId = fontId.replace('drafts.', '');
@@ -60,20 +90,8 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 	const variableAxes = getVariationAxes(font);
 	const namedInstances = getNamedInstances(font);
 
-	// Build variableInstances as a keyed object matching existing Sanity document shape
-	let variableInstances = null;
-	if (namedInstances.length > 0 && variableAxes) {
-		variableInstances = {};
-		const axisTags = Object.keys(variableAxes);
-		for (const inst of namedInstances) {
-			const key = inst.name || inst.postScriptName || 'Unknown';
-			const coord = {};
-			axisTags.forEach((tag, index) => {
-				coord[tag] = inst.coordinates[index];
-			});
-			variableInstances[key] = coord;
-		}
-	}
+	// Keyed variableInstances object matching the Sanity document shape (see buildVariableInstances).
+	const variableInstances = buildVariableInstances(font, variableAxes, namedInstances);
 
 	console.log('Variable instances:', variableInstances);
 	console.log('Variable axes:', variableAxes);
