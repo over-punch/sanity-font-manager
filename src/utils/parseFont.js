@@ -1,7 +1,17 @@
 // Async font parser — decompressor globals must be set before lib-font is imported
 
 import './setupDecompressors.js';
-import { Font } from 'lib-font';
+
+// This must remain a runtime import. A static import is evaluated before this
+// module's body, which lets lib-font snapshot missing decompressor globals and
+// fall back to Node's zlib API. That fallback is unavailable in Vite browsers.
+let fontConstructorPromise;
+const getFontConstructor = () => {
+	if (!fontConstructorPromise) {
+		fontConstructorPromise = import('lib-font').then(({ Font }) => Font);
+	}
+	return fontConstructorPromise;
+};
 
 /** Maximum font file size accepted for parsing (50 MB) */
 const MAX_FONT_FILE_SIZE = 50 * 1024 * 1024;
@@ -22,6 +32,8 @@ export async function parseFont(buffer, filename) {
 	if (buffer.byteLength > MAX_FONT_FILE_SIZE) {
 		throw new Error(`Font file exceeds ${MAX_FONT_FILE_SIZE / 1024 / 1024}MB limit: ${filename} (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB)`);
 	}
+
+	const Font = await getFontConstructor();
 
 	return new Promise((resolve, reject) => {
 		let settled = false;
