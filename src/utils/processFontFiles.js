@@ -261,11 +261,9 @@ export const extractWeightName = (font, italicKW, ttfFallbackMeta = null) => {
 	}
 
 	return weightName?.toString()
-		.replace('Italic', '')
-		.replace('It', '')
-		.replace('Slanted', '')
-		.replace('Slant', '')
-		.replace('Backslant', '')
+		// Word-boundary strip so short tokens ("It") can't eat the "it" inside a real word.
+		.replace(/\b(Italic|It|Slanted|Slant|Backslant)\b/gi, '')
+		.replace(/\s+/g, ' ')
 		.trim();
 };
 
@@ -279,7 +277,7 @@ export const extractWeightName = (font, italicKW, ttfFallbackMeta = null) => {
 export const extractWeightFromFullName = (font, title, ttfFallbackMeta = null) => {
 	let weightName = getNameString(font, 4) || ttfFallbackMeta?.fullName || '';
 	weightName = weightName.replace(title + ' ', '').replace(title, '').trim();
-	weightName = weightName.replace('Italic', '').replace('It', '').replace('Slanted', '').replace('Slant', '').trim();
+	weightName = weightName.replace(/\b(Italic|It|Slanted|Slant)\b/gi, '').replace(/\s+/g, ' ').trim();
 	return weightName;
 };
 
@@ -331,7 +329,10 @@ export const processItalicKeywords = (font, fontTitle, italicKeywordList) => {
 			fontTitle = fontTitle.replace(kwRegex, '').trim();
 			italicKW.push(kw);
 		}
-		if (fullName && fullName.toLowerCase().includes(kw.toLowerCase())) {
+		// Match the full name on a WORD BOUNDARY, not a bare substring — otherwise a short italic
+		// abbreviation like "It" matches the "it" inside a family name (e.g. "Da[it]h"), falsely
+		// flagging every roman in the family as italic. Mirrors the fontTitle check above.
+		if (fullName && kwRegex.test(fullName)) {
 			if (!italicKW.includes(kw)) italicKW.push(kw);
 		}
 	});

@@ -9,6 +9,7 @@ import {
 	determineWeight,
 	sortFontObjects,
 	createFontObject,
+	processItalicKeywords,
 } from '../utils/processFontFiles';
 import { sanitizeForSanityId } from '../utils/sanitizeForSanityId';
 import { mockLibFont } from './fixtures/mockLibFont';
@@ -211,6 +212,35 @@ describe('addItalicToFontTitle', () => {
 		const font = mockFont({ italicAngle: 0, fullName: 'MyFont Bold Oblique' });
 		const result = addItalicToFontTitle(font, 'MyFont Bold', ['Oblique'], 'Italic');
 		expect(result).toBe('MyFont Bold Oblique');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// processItalicKeywords — word-boundary matching
+// (regression: the "It" abbreviation must NOT match the "it" inside a family name like "Daith")
+// ---------------------------------------------------------------------------
+
+describe('processItalicKeywords', () => {
+	const list = ['Italic', 'Oblique', 'Slant', 'It'];
+
+	it('does NOT flag a roman family whose name merely CONTAINS the substring "it" (e.g. "Daith")', () => {
+		const font = mockFont({ fullName: 'Daith Text Regular' });
+		expect(processItalicKeywords(font, 'Daith Text Regular', list)).toEqual([]);
+	});
+
+	it('still flags a genuine italic ("... Italic")', () => {
+		const font = mockFont({ fullName: 'Daith Text Regular Italic' });
+		expect(processItalicKeywords(font, 'Daith Text Regular Italic', list)).toContain('Italic');
+	});
+
+	it('does not spuriously add the "It" abbreviation for a genuine italic (It is a substring of "Italic")', () => {
+		const font = mockFont({ fullName: 'Daith Text Regular Italic' });
+		expect(processItalicKeywords(font, 'Daith Text Regular Italic', list)).not.toContain('It');
+	});
+
+	it('still matches a standalone "It" abbreviation as a whole word', () => {
+		const font = mockFont({ fullName: 'MyFont Bold It' });
+		expect(processItalicKeywords(font, 'MyFont Bold It', list)).toContain('It');
 	});
 });
 
