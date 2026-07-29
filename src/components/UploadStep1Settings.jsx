@@ -207,7 +207,7 @@ export default function UploadStep1Settings({ settings, onStartProcessing }) {
 							gap={2}
 							paddingX={2}
 							paddingY={2}
-							style={{ background: 'var(--card-fg-color)', borderRadius: 3 }}
+							style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--card-fg-color)', borderRadius: 3 }}
 						>
 							<Text size={0} weight="semibold" style={{ width: 56, flexShrink: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Type</Text>
 							<Text size={0} weight="semibold" style={{ flex: 1, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>File Name</Text>

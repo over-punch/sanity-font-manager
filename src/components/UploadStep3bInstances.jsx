@@ -284,7 +284,7 @@ export default function UploadStep3bInstances({
 							</Flex>
 
 							{/* Column headers — filled bar with knockout (reversed) type */}
-							<Flex align="center" gap={2} paddingY={2} paddingX={2} style={{ background: 'var(--card-fg-color)', borderRadius: 3 }}>
+							<Flex align="center" gap={2} paddingY={2} paddingX={2} style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--card-fg-color)', borderRadius: 3 }}>
 								<Box style={{ width: 20 }} />
 								<Text size={0} weight="semibold" style={{ flex: 2, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Static Font Document</Text>
 								<Text size={0} weight="semibold" style={{ flex: 1, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Instance</Text>
