@@ -463,7 +463,7 @@ export default function UploadStep2Review({
 
 			{/* Upload button */}
 			{isReviewing && processedCount > 0 && (
-				<Flex justify="flex-end" gap={2} style={{ position: 'sticky', bottom: 0, background: 'var(--card-bg-color)', paddingTop: 8, paddingBottom: 4 }}>
+				<Flex justify="flex-end" gap={2} style={{ position: 'sticky', bottom: 0, zIndex: 2, background: 'var(--card-bg-color)', borderTop: '1px solid var(--card-border-color)', paddingTop: 8, paddingBottom: 4 }}>
 					<Button
 						mode="default"
 						tone="primary"

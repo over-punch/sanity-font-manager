@@ -283,11 +283,11 @@ export default function UploadStep3bInstances({
 								</Text>
 							</Flex>
 
-							{/* Column headers */}
-							<Flex align="center" gap={2} paddingY={1} style={{ borderBottom: '1px solid var(--card-border-color)' }}>
+							{/* Column headers — filled bar with knockout (reversed) type */}
+							<Flex align="center" gap={2} paddingY={2} paddingX={2} style={{ background: 'var(--card-fg-color)', borderRadius: 3 }}>
 								<Box style={{ width: 20 }} />
-								<Text size={0} weight="semibold" muted style={{ flex: 1 }}>Instance</Text>
-								<Text size={0} weight="semibold" muted style={{ flex: 2 }}>Static Font Document</Text>
+								<Text size={0} weight="semibold" style={{ flex: 1, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Instance</Text>
+								<Text size={0} weight="semibold" style={{ flex: 2, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Static Font Document</Text>
 							</Flex>
 
 							{/* Instance rows */}
@@ -311,7 +311,7 @@ export default function UploadStep3bInstances({
 												}
 											</Box>
 
-											<Text size={1} style={{ flex: 1, whiteSpace: 'nowrap' }}>{mapping.instanceName}</Text>
+											<Text size={1} textOverflow="ellipsis" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapping.instanceName}</Text>
 
 											<Box style={{ flex: 2 }}>
 												<Autocomplete
@@ -371,7 +371,7 @@ export default function UploadStep3bInstances({
 			})}
 
 			{/* Actions */}
-			<Flex justify="flex-end" gap={2} style={{ position: 'sticky', bottom: 0, background: 'var(--card-bg-color)', paddingTop: 8, paddingBottom: 4 }}>
+			<Flex justify="flex-end" gap={2} style={{ position: 'sticky', bottom: 0, zIndex: 2, background: 'var(--card-bg-color)', borderTop: '1px solid var(--card-border-color)', paddingTop: 8, paddingBottom: 4 }}>
 				<Button
 					mode="ghost"
 					text="Skip — I'll map instances later"

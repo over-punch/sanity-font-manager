@@ -201,16 +201,16 @@ export default function UploadStep1Settings({ settings, onStartProcessing }) {
 
 					{/* File table */}
 					<Box style={{ maxHeight: 350, overflowY: 'auto' }}>
-						{/* Table header */}
+						{/* Table header — filled bar with knockout (reversed) type */}
 						<Flex
 							align="center"
 							gap={2}
 							paddingX={2}
-							paddingY={1}
-							style={{ borderBottom: '1px solid var(--card-border-color)' }}
+							paddingY={2}
+							style={{ background: 'var(--card-fg-color)', borderRadius: 3 }}
 						>
-							<Text size={0} weight="semibold" muted style={{ width: 56, flexShrink: 0 }}>Type</Text>
-							<Text size={0} weight="semibold" muted style={{ flex: 1 }}>File Name</Text>
+							<Text size={0} weight="semibold" style={{ width: 56, flexShrink: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Type</Text>
+							<Text size={0} weight="semibold" style={{ flex: 1, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>File Name</Text>
 							<Box style={{ width: 32 }} />
 						</Flex>
 						<Stack space={0}>
@@ -235,7 +235,7 @@ export default function UploadStep1Settings({ settings, onStartProcessing }) {
 										>
 											{ext.toUpperCase()}
 										</Badge>
-										<Text size={1} style={{ flex: 1 }}>
+										<Text size={1} textOverflow="ellipsis" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
 											{file.name}
 										</Text>
 										<Button
