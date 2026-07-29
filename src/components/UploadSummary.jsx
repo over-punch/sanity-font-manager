@@ -5,6 +5,51 @@ import { Stack, Flex, Text, Card, Badge, Button, Box, Spinner } from '@sanity/ui
 import { CheckmarkCircleIcon, WarningOutlineIcon, ResetIcon } from '@sanity/icons';
 import { updateTypefaceDocument } from '../utils/updateTypefaceDocument';
 
+/** Cartoon-firework colours */
+const FW_COLORS = ['#ff5252', '#ffca28', '#66bb6a', '#42a5f5', '#ab47bc', '#ff7043', '#26c6da', '#ec407a'];
+/** Burst positions/timing across the celebration band */
+const FW_BURSTS = [
+	{ left: '18%', top: '58%', delay: 0 },
+	{ left: '72%', top: '42%', delay: 0.35 },
+	{ left: '46%', top: '30%', delay: 0.7 },
+	{ left: '86%', top: '66%', delay: 1.05 },
+	{ left: '32%', top: '72%', delay: 1.4 },
+];
+const FW_PARTICLES = 14;
+const FW_CSS = `
+@keyframes fwShoot {
+	0%   { transform: rotate(var(--a)) translateY(0) scale(1);   opacity: 0; }
+	12%  { opacity: 1; }
+	100% { transform: rotate(var(--a)) translateY(-52px) scale(0.35); opacity: 0; }
+}
+@keyframes fwFlash { 0% { transform: scale(0.2); opacity: 0.9; } 60%, 100% { transform: scale(1.4); opacity: 0; } }
+.fw-burst { position: absolute; width: 0; height: 0; }
+.fw-flash { position: absolute; top: -9px; left: -9px; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, #fff, rgba(255,255,255,0)); animation: fwFlash 1.7s ease-out 3; animation-delay: inherit; }
+.fw-p { position: absolute; top: 0; left: 0; width: 7px; height: 7px; margin: -3.5px; border-radius: 50%; animation: fwShoot 1.7s ease-out 3; animation-delay: inherit; }
+@media (prefers-reduced-motion: reduce) { .fw-burst { display: none; } }
+`;
+
+/** Self-contained cartoon fireworks overlay (pure CSS, no deps). Sits behind content, non-interactive. */
+function Fireworks() {
+	return (
+		<Box aria-hidden="true" style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0, borderRadius: 6 }}>
+			<style>{FW_CSS}</style>
+			{FW_BURSTS.map((b, bi) => (
+				<div key={bi} className="fw-burst" style={{ left: b.left, top: b.top, animationDelay: `${b.delay}s` }}>
+					<span className="fw-flash" style={{ animationDelay: `${b.delay}s` }} />
+					{Array.from({ length: FW_PARTICLES }).map((_, pi) => (
+						<span
+							key={pi}
+							className="fw-p"
+							style={{ '--a': `${(360 / FW_PARTICLES) * pi}deg`, background: FW_COLORS[(bi + pi) % FW_COLORS.length], animationDelay: `${b.delay}s` }}
+						/>
+					))}
+				</div>
+			))}
+		</Box>
+	);
+}
+
 /**
  * Post-upload summary — shows execution results with retry options.
  */
@@ -66,17 +111,20 @@ export default function UploadSummary({
 
 	return (
 		<Stack space={4}>
-			{/* Header */}
-			<Flex align="center" gap={3} ref={(el) => el?.focus?.()} tabIndex={-1}>
-				{allSuccess ? (
-					<CheckmarkCircleIcon style={{ color: '#43b649', fontSize: 28 }} />
-				) : (
-					<WarningOutlineIcon style={{ color: '#f03e2f', fontSize: 28 }} />
-				)}
-				<Text size={2} weight="semibold">
-					{allSuccess ? 'Upload Complete' : 'Upload Completed with Issues'}
-				</Text>
-			</Flex>
+			{/* Header — celebratory with a cartoon-fireworks overlay on full success */}
+			<Box style={{ position: 'relative', overflow: 'hidden', borderRadius: 6, padding: allSuccess ? '22px 12px' : 0 }}>
+				{allSuccess && <Fireworks />}
+				<Flex align="center" justify={allSuccess ? 'center' : 'flex-start'} gap={3} ref={(el) => el?.focus?.()} tabIndex={-1} style={{ position: 'relative', zIndex: 1 }}>
+					{allSuccess ? (
+						<CheckmarkCircleIcon style={{ color: '#43b649', fontSize: 34 }} />
+					) : (
+						<WarningOutlineIcon style={{ color: '#f03e2f', fontSize: 28 }} />
+					)}
+					<Text size={allSuccess ? 3 : 2} weight="semibold">
+						{allSuccess ? 'Upload complete' : 'Upload Completed with Issues'}
+					</Text>
+				</Flex>
+			</Box>
 
 			{/* Stats */}
 			{result && (

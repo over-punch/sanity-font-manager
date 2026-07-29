@@ -117,6 +117,24 @@ export default function UploadStep3Execute({
 		p.status === EXECUTION_STATUS.COMPLETE || p.status === EXECUTION_STATUS.ERROR
 	).length;
 
+	// Fine-grained progress per font (0..1) across its stages, so the bar advances per FILE, not per font.
+	const perFontFraction = (p) => {
+		if (!p) return 0;
+		switch (p.status) {
+			case EXECUTION_STATUS.COMPLETE:
+			case EXECUTION_STATUS.ERROR: return 1;
+			case EXECUTION_STATUS.CREATING_DOCUMENT: return 0.9;
+			case EXECUTION_STATUS.GENERATING_CSS:
+			case EXECUTION_STATUS.GENERATING_METADATA: return 0.8;
+			case EXECUTION_STATUS.UPLOADING_ASSETS: return p.filesTotal ? (p.filesComplete / p.filesTotal) * 0.7 : 0.1;
+			default: return 0; // queued
+		}
+	};
+	const totalFonts = fontEntries.length || 1;
+	const doneFraction = completedCount / totalFonts;                                    // fully-completed fonts (solid)
+	const fineFraction = fontEntries.reduce((s, e) => s + perFontFraction(execState.progress[e.tempId]), 0) / totalFonts; // incl. in-flight files (faded)
+	const barColor = execState.status === 'error' ? 'var(--card-badge-critical-bg-color)' : 'var(--card-badge-positive-bg-color)';
+
 	return (
 		<Stack space={4}>
 			{/* Global progress */}
@@ -142,19 +160,24 @@ export default function UploadStep3Execute({
 						<Text size={1} muted style={{ marginLeft: 'auto' }}>{formatElapsed(elapsedSeconds)}</Text>
 					</Flex>
 
-					{/* Progress bar */}
-					<Box style={{ height: 4, background: 'var(--card-border-color)', borderRadius: 2, overflow: 'hidden' }}>
+					{/* Progress bar — a faded layer tracks in-flight file progress; the solid layer is fonts fully done */}
+					<Box style={{ position: 'relative', height: 6, background: 'var(--card-border-color)', borderRadius: 3, overflow: 'hidden' }}>
+						{/* In-progress (font-file granularity) — lower opacity, sits ahead of the solid fill */}
 						<Box
 							style={{
-								height: '100%',
-								width: '100%',
-								transformOrigin: 'left',
-								transform: `scaleX(${fontEntries.length > 0 ? completedCount / fontEntries.length : 0})`,
-								background: execState.status === 'error'
-									? 'var(--card-badge-critical-bg-color)'
-									: 'var(--card-badge-positive-bg-color)',
+								position: 'absolute', inset: 0, transformOrigin: 'left',
+								transform: `scaleX(${fineFraction})`,
+								background: barColor, opacity: 0.4,
 								transition: 'transform 0.3s ease-out',
-								borderRadius: 2,
+							}}
+						/>
+						{/* Completed fonts — full opacity */}
+						<Box
+							style={{
+								position: 'absolute', inset: 0, transformOrigin: 'left',
+								transform: `scaleX(${doneFraction})`,
+								background: barColor,
+								transition: 'transform 0.3s ease-out',
 							}}
 						/>
 					</Box>

@@ -286,8 +286,8 @@ export default function UploadStep3bInstances({
 							{/* Column headers — filled bar with knockout (reversed) type */}
 							<Flex align="center" gap={2} paddingY={2} paddingX={2} style={{ background: 'var(--card-fg-color)', borderRadius: 3 }}>
 								<Box style={{ width: 20 }} />
-								<Text size={0} weight="semibold" style={{ flex: 1, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Instance</Text>
 								<Text size={0} weight="semibold" style={{ flex: 2, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Static Font Document</Text>
+								<Text size={0} weight="semibold" style={{ flex: 1, minWidth: 0, color: 'var(--card-bg-color)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Instance</Text>
 							</Flex>
 
 							{/* Instance rows */}
@@ -295,6 +295,9 @@ export default function UploadStep3bInstances({
 								{displayMappings.map(mapping => {
 									const isMatched = !!mapping.matchedFontId;
 									const options = getAutocompleteOptions(mapping.matchedFontId);
+										// Colour-code the instance name: italics one hue, roman/subfamily another, for quick scanning.
+										const isItalic = /\bitalic\b/i.test(mapping.instanceName || '');
+										const nameColor = isItalic ? '#c0559f' : '#3d8bd4';
 
 									return (
 										<Flex
@@ -311,9 +314,9 @@ export default function UploadStep3bInstances({
 												}
 											</Box>
 
-											<Text size={1} textOverflow="ellipsis" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapping.instanceName}</Text>
+											<Text size={1} textOverflow="ellipsis" style={{ flex: 1, order: 2, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: nameColor, fontStyle: isItalic ? 'italic' : 'normal' }}>{mapping.instanceName}</Text>
 
-											<Box style={{ flex: 2 }}>
+											<Box style={{ flex: 2, order: 1 }}>
 												<Autocomplete
 													id={`instance-${mapping._key}`}
 													options={options}
