@@ -235,7 +235,7 @@ export default function UploadStep1Settings({ settings, onStartProcessing }) {
 										>
 											{ext.toUpperCase()}
 										</Badge>
-										<Text size={1} textOverflow="ellipsis" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+										<Text size={1} textOverflow="ellipsis" style={{ flex: 1, minWidth: 0 }}>
 											{file.name}
 										</Text>
 										<Button

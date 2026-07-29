@@ -314,7 +314,7 @@ export default function UploadStep3bInstances({
 												}
 											</Box>
 
-											<Text size={1} textOverflow="ellipsis" style={{ flex: 1, order: 2, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: nameColor, fontStyle: isItalic ? 'italic' : 'normal' }}>{mapping.instanceName}</Text>
+											<Text size={1} textOverflow="ellipsis" style={{ flex: 1, order: 2, minWidth: 0, color: nameColor, fontStyle: isItalic ? 'italic' : 'normal' }}>{mapping.instanceName}</Text>
 
 											<Box style={{ flex: 2, order: 1 }}>
 												<Autocomplete

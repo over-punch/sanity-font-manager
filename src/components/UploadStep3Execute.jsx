@@ -204,7 +204,7 @@ export default function UploadStep3Execute({
 						return (
 							<Card key={entry.tempId} border radius={1} padding={2}>
 								<Flex align="center" gap={2}>
-									<Text size={1} textOverflow="ellipsis" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+									<Text size={1} textOverflow="ellipsis" style={{ flex: 1, minWidth: 0 }}>
 										{entry.title}
 									</Text>
 									<Box style={{ width: 120, flexShrink: 0, textAlign: 'right' }}>
