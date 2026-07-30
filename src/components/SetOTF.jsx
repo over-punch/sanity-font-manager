@@ -1,65 +1,75 @@
-// Detects and sets active OpenType features on a typeface document from the first linked font's metadata
+// Detects and sets active OpenType features on a typeface document from the feature tags stored on all its linked styles
 
 import React, { useState } from 'react';
 import { set, useFormValue } from 'sanity';
 import { Stack, Button, Text } from '@sanity/ui';
 import { useSanityClient } from '../hooks/useSanityClient';
+import { detectOpenTypeFeatures } from '../utils/detectOpenTypeFeatures';
 
 /**
- * Reads the first linked font's opentypeFeatures data and checks which configured
- * feature keys are supported. Patches the field with the detected features array.
+ * Reads every linked font's stored `opentypeFeatures.chars`, unions the tags across the family, and
+ * patches the field with each supported feature — both the `features` checkbox array and the
+ * per-feature sub-objects carrying their canonical `feature` tag.
  */
 export const SetOTF = (props) => {
 	const { onChange, value = {} } = props;
 	const client = useSanityClient();
 	const stylesObject = useFormValue(['styles']);
 	const [message, setMessage] = useState('');
+	const [running, setRunning] = useState(false);
 
-	/** Fetches the first font document and matches its OpenType features against the configured keys. */
+	/** Sets a status message and clears it after 5 seconds */
+	const flashMessage = (text) => {
+		setMessage(text);
+		setTimeout(() => setMessage(''), 5000);
+	};
+
+	/** Fetches every linked font and matches their combined feature tags against the configured keys. */
 	const detect = async () => {
 		if (!stylesObject?.fonts?.length) {
-			setMessage('Error: No fonts found in styles. Please add at least one font first.');
-			setTimeout(() => setMessage(''), 5000);
+			flashMessage('Error: No fonts found in styles. Please add at least one font first.');
 			return;
 		}
 
-		const fontRef = stylesObject.fonts[0]?._ref;
-		if (!fontRef) {
-			setMessage('Error: Invalid font reference in styles.');
-			setTimeout(() => setMessage(''), 5000);
+		const ids = stylesObject.fonts.map((font) => font?._ref).filter(Boolean);
+		if (!ids.length) {
+			flashMessage('Error: No valid font references in styles.');
 			return;
 		}
 
+		// Unpublished styles only exist as drafts, so look for both ids and let the draft copy count too.
+		const draftIds = ids.map((id) => (id.startsWith('drafts.') ? id : `drafts.${id}`));
+
+		setRunning(true);
 		try {
-			const font = await client.fetch('*[_type == "font" && _id == $id][0]', { id: fontRef });
+			const fontDocs = await client.fetch(
+				`*[_type == "font" && (_id in $ids || _id in $draftIds)]{ _id, opentypeFeatures }`,
+				{ ids, draftIds }
+			);
 
-			if (!font) {
-				setMessage('Error: Could not find the referenced font.');
-				setTimeout(() => setMessage(''), 5000);
+			if (!fontDocs?.length) {
+				flashMessage(`Error: Could not find any of the ${ids.length} referenced fonts.`);
 				return;
 			}
 
-			if (!font.opentypeFeatures?.chars) {
-				setMessage(`Error: No OpenType feature data found in "${font.title || 'this font'}". Generate font data first.`);
-				setTimeout(() => setMessage(''), 5000);
+			const { features, detected, fontsWithData } = detectOpenTypeFeatures(fontDocs, value);
+
+			if (!fontsWithData) {
+				flashMessage(`Error: No OpenType feature data found in any of the ${fontDocs.length} linked styles. Generate font data first.`);
 				return;
 			}
 
-			const features = [];
-			Object.keys(value).forEach(key => {
-				if (key !== 'features' && value[key]?.feature) {
-					const requiredFeatures = value[key].feature.split(' ');
-					const approved = requiredFeatures.every(v => font.opentypeFeatures.chars.includes(v));
-					if (approved) features.push(key);
-				}
-			});
-
-			onChange(set({ ...value, features }));
-			setMessage(`Features detected: ${features.length ? features.join(', ') : 'none'}.`);
-			setTimeout(() => setMessage(''), 5000);
+			onChange(set({ ...value, ...detected, features }));
+			flashMessage(
+				features.length
+					? `Detected ${features.length} features across ${fontsWithData} of ${ids.length} styles.`
+					: `No supported features found across ${fontsWithData} of ${ids.length} styles.`
+			);
 		} catch (err) {
-			setMessage('Error detecting features. Check the console for details.');
+			flashMessage('Error detecting features. Check the console for details.');
 			console.error('SetOTF detect error:', err);
+		} finally {
+			setRunning(false);
 		}
 	};
 
@@ -72,8 +82,9 @@ export const SetOTF = (props) => {
 			)}
 			{!!stylesObject?.fonts?.length && (
 				<Button
-					text="Detect OTF"
+					text={running ? 'Detecting…' : 'Detect OTF'}
 					mode="ghost"
+					disabled={running}
 					onClick={detect}
 					style={{ borderRadius: '0 3px 0 0', marginBottom: '1rem' }}
 				/>
