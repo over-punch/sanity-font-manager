@@ -1,10 +1,34 @@
 // Tests for detectOpenTypeFeatures — tag union across styles, multi-tag features, and value preservation
 import { describe, it, expect } from 'vitest';
 
-import { collectSupportedTags, detectOpenTypeFeatures } from '../utils/detectOpenTypeFeatures.js';
+import { collectSupportedTags, dedupeFontDocs, detectOpenTypeFeatures } from '../utils/detectOpenTypeFeatures.js';
 
 /** Builds a minimal font document carrying the given feature tags */
 const font = (id, chars) => ({ _id: id, opentypeFeatures: { chars } });
+
+describe('dedupeFontDocs', () => {
+	it('prefers the draft when both copies of a font come back', () => {
+		const docs = dedupeFontDocs([
+			{ _id: 'daith-big-thin', opentypeFeatures: { chars: ['liga'] } },
+			{ _id: 'drafts.daith-big-thin', opentypeFeatures: { chars: ['liga', 'ss01'] } },
+		]);
+		expect(docs).toHaveLength(1);
+		expect(docs[0]._id).toBe('drafts.daith-big-thin');
+	});
+
+	it('keeps distinct fonts and id-less documents, and drops nullish entries', () => {
+		expect(dedupeFontDocs([{ _id: 'a' }, { _id: 'b' }, {}, null, undefined])).toHaveLength(3);
+	});
+
+	it('does not inflate the style count when drafts and published both match', () => {
+		// The count feeds the "across N of M styles" message — it must not exceed the real style count.
+		const both = [
+			font('a', ['liga']),
+			{ _id: 'drafts.a', opentypeFeatures: { chars: ['liga'] } },
+		];
+		expect(collectSupportedTags(both).fontsWithData).toBe(1);
+	});
+});
 
 describe('collectSupportedTags', () => {
 	it('unions tags across every style', () => {

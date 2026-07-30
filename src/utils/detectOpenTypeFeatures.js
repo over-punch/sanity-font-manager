@@ -3,17 +3,41 @@
 import { OPENTYPE_FEATURE_TAGS } from '../schema/openTypeFeatureTags.js';
 
 /**
+ * Reduces draft/published pairs of the same font to a single document, preferring the draft — that is
+ * what the editor is looking at. Without this, a lookup covering both ids counts the same style twice.
+ * @param {object[]} fontDocs - font documents carrying `_id`
+ * @returns {object[]} one document per underlying font
+ */
+export function dedupeFontDocs(fontDocs = []) {
+	const byBaseId = new Map();
+
+	for (const doc of fontDocs) {
+		if (!doc) continue;
+		// An id-less document can't be paired with anything, so keep it under its own key rather than drop it.
+		if (!doc._id) {
+			byBaseId.set(Symbol('no-id'), doc);
+			continue;
+		}
+		const isDraft = doc._id.startsWith('drafts.');
+		const baseId = isDraft ? doc._id.slice('drafts.'.length) : doc._id;
+		if (isDraft || !byBaseId.has(baseId)) byBaseId.set(baseId, doc);
+	}
+
+	return [...byBaseId.values()];
+}
+
+/**
  * Collects the union of OpenType layout tags across every supplied font document.
  * A family's styles rarely agree — italics routinely drop stylistic sets the romans carry — so the
  * union answers "what can this typeface do", which is what a family-level field describes.
- * @param {object[]} fontDocs - font documents projected with `opentypeFeatures`
+ * @param {object[]} fontDocs - font documents projected with `_id` and `opentypeFeatures`
  * @returns {{tags: Set<string>, fontsWithData: number}} union of tags, and how many styles carried any
  */
 export function collectSupportedTags(fontDocs = []) {
 	const tags = new Set();
 	let fontsWithData = 0;
 
-	for (const doc of fontDocs) {
+	for (const doc of dedupeFontDocs(fontDocs)) {
 		const chars = doc?.opentypeFeatures?.chars;
 		if (!Array.isArray(chars) || chars.length === 0) continue;
 		fontsWithData++;

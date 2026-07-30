@@ -108,7 +108,7 @@ export {
 // Schema field definitions
 export { openTypeField, createOpenTypeField } from './schema/openTypeField.js';
 export { OPENTYPE_FEATURE_TAGS } from './schema/openTypeFeatureTags.js';
-export { collectSupportedTags, detectOpenTypeFeatures } from './utils/detectOpenTypeFeatures.js';
+export { collectSupportedTags, dedupeFontDocs, detectOpenTypeFeatures } from './utils/detectOpenTypeFeatures.js';
 export { styleCountField } from './schema/styleCountField.js';
 export { stylisticSetField } from './schema/stylisticSetField.js';
 export { createStylesField } from './schema/stylesField.js';

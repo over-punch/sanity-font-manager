@@ -27,6 +27,23 @@ describe('OPENTYPE_FEATURE_TAGS', () => {
 		}
 	});
 
+	it('matches the schema title initialValue for every key', () => {
+		// Detection writes the map's title, while checking a feature by hand writes the schema's
+		// initialValue — they must agree or the same feature gets two different labels.
+		for (const field of schemaFeatureFields) {
+			expect(OPENTYPE_FEATURE_TAGS[field.name].title, `${field.name} title`).toBe(subfieldInitialValue(field, 'title'));
+		}
+	});
+
+	it('matches the field title and the checkbox option title for every key', () => {
+		const featuresField = openTypeField.fields.find((f) => f.name === 'features');
+		const optionTitles = new Map(featuresField.options.list.map((option) => [option.value, option.title]));
+		for (const field of schemaFeatureFields) {
+			expect(OPENTYPE_FEATURE_TAGS[field.name].title, `${field.name} field title`).toBe(field.title);
+			expect(OPENTYPE_FEATURE_TAGS[field.name].title, `${field.name} option title`).toBe(optionTitles.get(field.name));
+		}
+	});
+
 	it('lists every key in the features checkbox options', () => {
 		const featuresField = openTypeField.fields.find((f) => f.name === 'features');
 		const optionValues = featuresField.options.list.map((option) => option.value).sort();

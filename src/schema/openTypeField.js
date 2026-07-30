@@ -21,7 +21,7 @@ export const openTypeField = {
 				{ title: "All Caps", value: "allCaps"},
 				{ title: "Alternate Annotation", value: "alternateAnnotation"},
 				{ title: "Alternative Fractions", value: "alternativeFractions"},
-				{ title: "Capitals To Small Caps", value: "capitalsToSmallCaps"},
+				{ title: "Capitals to Small Caps", value: "capitalsToSmallCaps"},
 				{ title: "Capitals to Petite Caps", value: "capitalsToPetiteCaps"},
 				{ title: "Case Sensitive Forms", value: "caseSensitiveForms"},
 				{ title: "Contextual Alternates", value: "contextualAlternates"},
@@ -35,7 +35,7 @@ export const openTypeField = {
 				{ title: "Historical Ligatures", value: "historicalLigatures"},
 				{ title: "Initial Form", value: "initialForm"},
 				{ title: "Isolated Form", value: "isolatedForm"},
-				{ title: "Justified Alternates", value: "justifiedAlternates"},
+				{ title: "Justification Alternates", value: "justifiedAlternates"},
 				{ title: "Localized Forms", value: "localizedForms"},
 				{ title: "Mark Positioning", value: "markPositioning"},
 				{ title: "Mark Positioning via Subs", value: "markPositioningViaSubs"},
@@ -124,8 +124,8 @@ export const openTypeField = {
 			{
 				name:'title',
 				type:'string',
-				placeholder:'eg. allCaps',
-				initialValue:'allCaps',
+				placeholder:'eg. All Caps',
+				initialValue:'All Caps',
 			},
 			{
 				name:'feature',
@@ -200,7 +200,7 @@ export const openTypeField = {
 		]
 	},
 	{
-		title:'Capitals To Small Caps',
+		title:'Capitals to Small Caps',
 		name:'capitalsToSmallCaps',
 		type:'object',
 		hidden: ({parent}) => !parent?.features?.includes("capitalsToSmallCaps"),
@@ -592,7 +592,7 @@ export const openTypeField = {
 		]
 	},
 	{
-		title:'Justified Alternates',
+		title:'Justification Alternates',
 		name:'justifiedAlternates',
 		type:'object',
 		hidden: ({parent}) => !parent?.features?.includes("justifiedAlternates"),
@@ -1082,8 +1082,8 @@ export const openTypeField = {
 			{
 				name:'title',
 				type:'string',
-				placeholder:'eg. StandardLigatures',
-				initialValue:'StandardLigatures',
+				placeholder:'eg. Standard Ligatures',
+				initialValue:'Standard Ligatures',
 			},
 			{
 				name:'feature',
@@ -1641,8 +1641,8 @@ export const openTypeField = {
 			{
 				name:'title',
 				type:'string',
-				placeholder:'eg. Stylistic Set10',
-				initialValue:'Stylistic Set10',
+				placeholder:'eg. Stylistic Set 10',
+				initialValue:'Stylistic Set 10',
 			},
 			{
 				name:'feature',

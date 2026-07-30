@@ -128,7 +128,10 @@ export async function buildUploadPlan({
 				error: err.message,
 				parsedMetadata: null,
 				glyphCount: 0,
-				opentypeFeatures: [],
+				// Object-wrapped to match the `font.opentypeFeatures` schema field, which is an object with a
+				// `chars` array. A bare array here reaches the document unchanged whenever metadata generation
+				// is skipped (no TTF/OTF), leaving every reader unable to find `.chars`.
+				opentypeFeatures: { chars: [] },
 				variationAxes: null,
 			};
 
@@ -320,7 +323,8 @@ async function buildFontPlanEntry({
 		error: null,
 		parsedMetadata: { ...metadata, ...metrics },
 		glyphCount: getGlyphCount(font),
-		opentypeFeatures: getAllFeatureTags(font),
+		// Must match the schema's object-with-chars shape — see the note on the error-path entry above.
+		opentypeFeatures: { chars: getAllFeatureTags(font) },
 		variationAxes: axes,
 	};
 }
