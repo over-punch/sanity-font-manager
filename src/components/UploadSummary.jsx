@@ -3,52 +3,11 @@
 import React, { useState, useCallback } from 'react';
 import { Stack, Flex, Text, Card, Badge, Button, Box, Spinner } from '@sanity/ui';
 import { CheckmarkCircleIcon, WarningOutlineIcon, ResetIcon } from '@sanity/icons';
+import { useConfettiText } from '@liiift-studio/confettitext/react';
 import { updateTypefaceDocument } from '../utils/updateTypefaceDocument';
 
-/** Cartoon-firework colours */
-const FW_COLORS = ['#ff5252', '#ffca28', '#66bb6a', '#42a5f5', '#ab47bc', '#ff7043', '#26c6da', '#ec407a'];
-/** Burst positions/timing across the celebration band */
-const FW_BURSTS = [
-	{ left: '18%', top: '58%', delay: 0 },
-	{ left: '72%', top: '42%', delay: 0.35 },
-	{ left: '46%', top: '30%', delay: 0.7 },
-	{ left: '86%', top: '66%', delay: 1.05 },
-	{ left: '32%', top: '72%', delay: 1.4 },
-];
-const FW_PARTICLES = 14;
-const FW_CSS = `
-@keyframes fwShoot {
-	0%   { transform: rotate(var(--a)) translateY(0) scale(1);   opacity: 0; }
-	12%  { opacity: 1; }
-	100% { transform: rotate(var(--a)) translateY(-52px) scale(0.35); opacity: 0; }
-}
-@keyframes fwFlash { 0% { transform: scale(0.2); opacity: 0.9; } 60%, 100% { transform: scale(1.4); opacity: 0; } }
-.fw-burst { position: absolute; width: 0; height: 0; }
-.fw-flash { position: absolute; top: -9px; left: -9px; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, #fff, rgba(255,255,255,0)); animation: fwFlash 1.7s ease-out 3; animation-delay: inherit; }
-.fw-p { position: absolute; top: 0; left: 0; width: 7px; height: 7px; margin: -3.5px; border-radius: 50%; animation: fwShoot 1.7s ease-out 3; animation-delay: inherit; }
-@media (prefers-reduced-motion: reduce) { .fw-burst { display: none; } }
-`;
-
-/** Self-contained cartoon fireworks overlay (pure CSS, no deps). Sits behind content, non-interactive. */
-function Fireworks() {
-	return (
-		<Box aria-hidden="true" style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0, borderRadius: 6 }}>
-			<style>{FW_CSS}</style>
-			{FW_BURSTS.map((b, bi) => (
-				<div key={bi} className="fw-burst" style={{ left: b.left, top: b.top, animationDelay: `${b.delay}s` }}>
-					<span className="fw-flash" style={{ animationDelay: `${b.delay}s` }} />
-					{Array.from({ length: FW_PARTICLES }).map((_, pi) => (
-						<span
-							key={pi}
-							className="fw-p"
-							style={{ '--a': `${(360 / FW_PARTICLES) * pi}deg`, background: FW_COLORS[(bi + pi) % FW_COLORS.length], animationDelay: `${b.delay}s` }}
-						/>
-					))}
-				</div>
-			))}
-		</Box>
-	);
-}
+/** Celebration palette for the success burst */
+const CONFETTI_COLORS = ['#ff5252', '#ffca28', '#66bb6a', '#42a5f5', '#ab47bc', '#ff7043', '#26c6da', '#ec407a'];
 
 /**
  * Post-upload summary — shows execution results with retry options.
@@ -69,6 +28,19 @@ export default function UploadSummary({
 	const hasFailedFonts = result?.failedFonts?.length > 0;
 	const hasTypefacePatchError = result?.typefacePatchError && !patchRetryResult?.success;
 	const allSuccess = result?.success && !hasTypefacePatchError;
+
+	// Celebrate a clean upload by bursting the heading's own letters (confettitext.com). This summary
+	// mounts once the run has finished, so the outcome is already known and 'mount' fires immediately;
+	// anything short of a clean run stays 'manual' so nothing fires. The library skips the burst under
+	// prefers-reduced-motion and marks its layer aria-hidden.
+	const { ref: confettiRef } = useConfettiText({
+		trigger: allSuccess ? 'mount' : 'manual',
+		particleCount: 120,
+		spread: 90,
+		startVelocity: 34,
+		scalar: 1.1,
+		colors: CONFETTI_COLORS,
+	});
 
 	/** Retry the typeface document patch only */
 	const handleRetryTypefacePatch = useCallback(async () => {
@@ -111,9 +83,8 @@ export default function UploadSummary({
 
 	return (
 		<Stack space={4}>
-			{/* Header — celebratory with a cartoon-fireworks overlay on full success */}
-			<Box style={{ position: 'relative', overflow: 'hidden', borderRadius: 6, padding: allSuccess ? '22px 12px' : 0 }}>
-				{allSuccess && <Fireworks />}
+			{/* Header — on a clean run the heading's own letters burst as confetti */}
+			<Box style={{ position: 'relative', borderRadius: 6, padding: allSuccess ? '22px 12px' : 0 }}>
 				<Flex align="center" justify={allSuccess ? 'center' : 'flex-start'} gap={3} ref={(el) => el?.focus?.()} tabIndex={-1} style={{ position: 'relative', zIndex: 1 }}>
 					{allSuccess ? (
 						<CheckmarkCircleIcon style={{ color: '#43b649', fontSize: 34 }} />
@@ -121,7 +92,7 @@ export default function UploadSummary({
 						<WarningOutlineIcon style={{ color: '#f03e2f', fontSize: 28 }} />
 					)}
 					<Text size={allSuccess ? 3 : 2} weight="semibold">
-						{allSuccess ? 'Upload complete' : 'Upload Completed with Issues'}
+						<span ref={confettiRef}>{allSuccess ? 'Upload complete' : 'Upload Completed with Issues'}</span>
 					</Text>
 				</Flex>
 			</Box>
