@@ -5,6 +5,7 @@ import { Box, Stack, Flex, Text, Card, Badge, Button, Spinner, Autocomplete } fr
 import { CheckmarkCircleIcon, CloseCircleIcon, SearchIcon } from '@sanity/icons';
 import { nanoid } from 'nanoid';
 import { parseVariableFontInstances } from '../utils/parseVariableFontInstances';
+import { HighlightedName } from './HighlightedName';
 
 /**
  * Step 3.5 — Variable font instance mapping.
@@ -200,6 +201,13 @@ export default function UploadStep3bInstances({
 			}));
 	}, [allStaticFonts, claimedFontIds]);
 
+	// The family's distinct subfamilies, so an instance name can be highlighted even when it has not
+	// been matched to a static font yet.
+	const knownSubfamilies = useMemo(
+		() => [...new Set(allStaticFonts.map((f) => f.subfamily).filter(Boolean))],
+		[allStaticFonts]
+	);
+
 	if (loading) {
 		return (
 			<Card border padding={4} radius={2}>
@@ -295,9 +303,8 @@ export default function UploadStep3bInstances({
 								{displayMappings.map(mapping => {
 									const isMatched = !!mapping.matchedFontId;
 									const options = getAutocompleteOptions(mapping.matchedFontId);
-										// Colour-code the instance name: italics one hue, roman/subfamily another, for quick scanning.
-										const isItalic = /\bitalic\b/i.test(mapping.instanceName || '');
-										const nameColor = isItalic ? '#c0559f' : '#3d8bd4';
+										// The subfamily and slant words are highlighted individually (see HighlightedName), so
+										// only the parts that differ between rows stand out when comparing.
 
 									return (
 										<Flex
@@ -314,7 +321,9 @@ export default function UploadStep3bInstances({
 												}
 											</Box>
 
-											<Text size={1} textOverflow="ellipsis" style={{ flex: 1, order: 2, minWidth: 0, color: nameColor, fontStyle: isItalic ? 'italic' : 'normal' }}>{mapping.instanceName}</Text>
+											<Text size={1} textOverflow="ellipsis" style={{ flex: 1, order: 2, minWidth: 0 }}>
+												<HighlightedName name={mapping.instanceName} subfamily={knownSubfamilies} />
+											</Text>
 
 											<Box style={{ flex: 2, order: 1 }}>
 												<Autocomplete

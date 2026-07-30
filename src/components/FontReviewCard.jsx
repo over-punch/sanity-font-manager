@@ -5,6 +5,7 @@ import { Card, Stack, Flex, Box, Text, TextInput, Badge, Button, Select, Tooltip
 import { ChevronDownIcon, ChevronRightIcon, TrashIcon, ResetIcon, InfoOutlineIcon } from '@sanity/icons';
 import { FONT_STATUS, RECOMMENDATION } from '../utils/planTypes';
 import ExistingDocumentResolver from './ExistingDocumentResolver';
+import { HighlightedName } from './HighlightedName';
 
 /** Standard file types shown in the files row */
 const STANDARD_TYPES = ['ttf', 'otf', 'woff', 'woff2'];
@@ -159,7 +160,9 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 					</Box>
 					<Box style={{ flex: 1, whiteSpace: 'nowrap',}}>
 						<Text size={1} weight="semibold"  style={{ whiteSpace: 'nowrap'  }}>
-							{entry.title || entry.sourceFileName}
+							{entry.title
+								? <HighlightedName name={entry.title} subfamily={entry.subfamily} />
+								: entry.sourceFileName}
 							{entry.variableFont && <Badge tone="primary" fontSize={0} style={{ marginLeft: 6 }}>VF</Badge>}
 							{hasConflict && <Badge tone="caution" fontSize={0} style={{ marginLeft: 6 }}>ID Conflict</Badge>}
 						</Text>
