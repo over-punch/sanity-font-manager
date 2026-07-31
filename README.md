@@ -105,6 +105,16 @@ export const typeface = {
     {
       ...createStylesField({ generateCollections: true, pairs: true, styleCount: true }),
       components: { input: BatchUploadFonts },
+      // Optional per-foundry defaults, read from the field's schema options:
+      options: {
+        defaults: {
+          price: 40,            // starting per-style price
+          pricing: true,        // set false to hide every price control (see below)
+          sell: true,           // what `sell` becomes on new fonts when pricing is off
+          preserveFileNames: false,
+          preserveShortenedNames: true,
+        },
+      },
     },
 
     // Spreadable pre-built fields (optional):
@@ -117,6 +127,30 @@ export const typeface = {
 Then set the required environment variables in your studio (`SANITY_STUDIO_SITE_URL`, `SANITY_STUDIO_PROJECT_ID`, `SANITY_STUDIO_DATASET` — see [Environment variables](#environment-variables)). Multi-format conversion and subsetting additionally need a `/api/sanity/fontWorker` endpoint on the consuming site (see [`generateFontFile`](#css-and-file-generation) / [`generateSubset`](#css-and-file-generation)); TTF/OTF/WOFF/WOFF2 upload, parsing, CSS, and metadata work without it.
 
 Open a typeface document, drag font files onto the styles field, review the detected weights/styles, resolve any duplicates, and confirm. See [Upload workflow](#upload-workflow) for the full step-by-step.
+
+### Turning off per-style pricing
+
+Not every foundry prices per font document. Where the price lives on the typeface or the licence
+tier instead, a price per style is noise the curator has to fill in for nothing. Set
+`options.defaults.pricing = false` on the uploader field to hide every price control — the wizard's
+Settings price, the per-font price in the review preview, and the "Update Font Prices" utility.
+
+```js
+{
+  ...createStylesField({ /* … */ }),
+  components: { input: BatchUploadFonts },
+  options: { defaults: { pricing: false, sell: true } },
+}
+```
+
+**`sell` is deliberately separate from the price.** New font documents are normally written with
+`sell: price > 0`, but with pricing hidden the price is always `0` — so deriving `sell` from it would
+write `sell: false` on every upload and silently switch off whatever the consuming site gates on that
+field (on Darden, the type-tester buy button). With `pricing: false`, `sell` comes from
+`options.defaults.sell` instead, defaulting to `true`. Set it to `false` if new uploads should start
+unsellable.
+
+With `pricing` left on (the default), behaviour is unchanged.
 
 ### Prerequisites the consumer provides
 

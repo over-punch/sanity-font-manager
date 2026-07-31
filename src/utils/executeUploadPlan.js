@@ -380,8 +380,13 @@ export async function executeSingleFont({ entry, plan, client, progress, onProgr
 				title: entry.title,
 				slug: { _type: 'slug', current: fontDocId },
 				typefaceName: plan.settings.typefaceTitle || entry.title,
-				price: plan.settings.price,
-				sell: plan.settings.price > 0,
+				// With per-style pricing off, `sell` comes from the setting rather than the price —
+				// otherwise a hidden (zero) price would set `sell: false` and silently remove the
+				// type-tester buy button on every newly uploaded font.
+				price: plan.settings.pricing === false ? 0 : plan.settings.price,
+				sell: plan.settings.pricing === false
+					? plan.settings.sell !== false
+					: plan.settings.price > 0,
 				normalWeight: true,
 				...refreshFields,
 			};

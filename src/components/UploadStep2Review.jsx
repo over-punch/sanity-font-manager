@@ -31,6 +31,8 @@ export default function UploadStep2Review({
 	const isReviewing = plan.phase === PLAN_PHASE.REVIEWING || plan.phase === PLAN_PHASE.READY;
 
 	// Settings state (editable in review)
+	// Foundries pricing at the typeface/licence level switch this off via the field's schema options.
+	const pricingEnabled = plan.settings?.pricing !== false;
 	const [localPrice, setLocalPrice] = useState(String(plan.settings?.price || 0));
 	const [localPreserveShortenedNames, setLocalPreserveShortenedNames] = useState(plan.settings?.preserveShortenedNames ?? true);
 	const [localPreserveFileNames, setLocalPreserveFileNames] = useState(plan.settings?.preserveFileNames ?? false);
@@ -297,16 +299,18 @@ export default function UploadStep2Review({
 				<Text size={1} weight="semibold">Settings</Text>
 				<Card border padding={3} radius={2}>
 					<Stack space={3}>
-						<Grid columns={[2]} gap={4}>
-							<Box>
-								<PriceInput
-									inputPrice={localPrice}
-									handleInputChange={(e) => {
-										setLocalPrice(e.target.value);
-										dispatch({ type: 'SET_SETTINGS', settings: { price: Number(e.target.value) || 0 } });
-									}}
-								/>
-							</Box>
+						<Grid columns={[pricingEnabled ? 2 : 1]} gap={4}>
+							{pricingEnabled && (
+								<Box>
+									<PriceInput
+										inputPrice={localPrice}
+										handleInputChange={(e) => {
+											setLocalPrice(e.target.value);
+											dispatch({ type: 'SET_SETTINGS', settings: { price: Number(e.target.value) || 0 } });
+										}}
+									/>
+								</Box>
+							)}
 							<Stack space={3}>
 								<Flex align="center" gap={2}>
 									<Switch
@@ -437,6 +441,8 @@ export default function UploadStep2Review({
 								allExpanded={allExpanded}
 								typefaceTitle={plan.settings?.typefaceTitle}
 								price={plan.settings?.price}
+								pricing={plan.settings?.pricing}
+								sell={plan.settings?.sell}
 							/>
 						))}
 					</Stack>

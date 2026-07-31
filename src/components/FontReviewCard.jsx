@@ -16,7 +16,7 @@ const EXTENDED_TYPES = ['eot', 'svg', 'css', 'woff2_subset', 'woff2_web'];
  * Collapsible review card for a single font in the upload plan.
  * Table-style header row with weight/style/files/action columns.
  */
-const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded, typefaceTitle, price }) {
+const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded, typefaceTitle, price, pricing, sell }) {
 	const [expanded, setExpanded] = useState(false);
 	const [showAllFileTypes, setShowAllFileTypes] = useState(false);
 	const [showDocPreview, setShowDocPreview] = useState(false);
@@ -410,8 +410,11 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 											['style', entry.style],
 											['subfamily', entry.subfamily || '—'],
 											['variableFont', String(entry.variableFont)],
-											['price', price ?? '—'],
-											['sell', price > 0 ? 'true' : 'false'],
+											// This block previews what will be written. With pricing off the document still
+											// gets a price of 0, but `sell` comes from the setting — showing "false" here
+											// because the price is 0 would misrepresent the write.
+											...(pricing === false ? [] : [['price', price ?? '—']]),
+											['sell', String(pricing === false ? sell !== false : price > 0)],
 											['normalWeight', 'true'],
 											['files', (entry.files || []).map(f => f.name).join(', ') || '—'],
 										].map(([key, value]) => (

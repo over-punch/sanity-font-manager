@@ -32,6 +32,9 @@ const formatElapsed = (s) => {
 
 export const BatchUploadFonts = (props) => {
 	const defaults = props?.schemaType?.options?.defaults || {};
+	// Per-style pricing is on unless a foundry opts out via the field's schema options. Darden prices at
+	// the typeface/licence level, so a price per font document is noise there.
+	const pricingEnabled = defaults.pricing !== false;
 	const [status, setStatus] = useState('ready');
 	const [ready, setReady] = useState(true);
 	const [inputPrice, setInputPrice] = useState(String(defaults.price ?? '0'));
@@ -623,17 +626,19 @@ export const BatchUploadFonts = (props) => {
 									}
 								</Stack>
 
-								{/* Update Font Prices */}
-								<Stack space={3}>
-									<Text size={1} weight="semibold" style={{ lineHeight: 1.6 }}>Update Font Prices</Text>
-									{ready === 'price'
-										? renderProcessing()
-										: <Stack space={2}>
-											<PriceInput inputPrice={inputPrice} handleInputChange={handleInputChange} />
-											<Button mode="ghost" tone="primary" text="Update All Font Prices" style={{ width: '100%' }} onClick={handleChangeFontPrice} disabled={ready !== true} />
-										</Stack>
-									}
-								</Stack>
+								{/* Update Font Prices — hidden for foundries that price per typeface/licence */}
+								{pricingEnabled && (
+									<Stack space={3}>
+										<Text size={1} weight="semibold" style={{ lineHeight: 1.6 }}>Update Font Prices</Text>
+										{ready === 'price'
+											? renderProcessing()
+											: <Stack space={2}>
+												<PriceInput inputPrice={inputPrice} handleInputChange={handleInputChange} />
+												<Button mode="ghost" tone="primary" text="Update All Font Prices" style={{ width: '100%' }} onClick={handleChangeFontPrice} disabled={ready !== true} />
+											</Stack>
+										}
+									</Stack>
+								)}
 
 								{/* Regenerate CSS */}
 								<Stack space={3}>

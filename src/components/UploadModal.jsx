@@ -50,6 +50,10 @@ export default function UploadModal({
 }) {
 	const [plan, dispatch] = useReducer(planReducer, null, () => createEmptyPlan({
 		price: defaults.price ?? 0,
+		// `pricing: false` hides every price control; `sell` then decides what newly created font
+		// documents get, since it can no longer be derived from a price nobody sets.
+		pricing: defaults.pricing !== false,
+		sell: defaults.sell !== false,
 		preserveShortenedNames: defaults.preserveShortenedNames ?? false,
 		preserveFileNames: defaults.preserveFileNames ?? false,
 	}));

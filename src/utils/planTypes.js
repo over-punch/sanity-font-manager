@@ -166,6 +166,14 @@ export function createEmptyPlan(settings = {}) {
 		version: PLAN_VERSION,
 		settings: {
 			price: 0,
+			// Foundries that price at the typeface/licence level (Darden) have no use for a per-style
+			// price. Set `pricing: false` via the field's schema options to hide every price control.
+			pricing: true,
+			// What `sell` becomes on newly created font documents when pricing is hidden. With pricing
+			// ON, `sell` is derived from the price as before. This must stay separate: `sell` gates the
+			// type-tester buy button, so deriving it from a hidden (zero) price would silently ship
+			// unsellable fonts.
+			sell: true,
 			preserveShortenedNames: false,
 			preserveFileNames: false,
 			...settings,
