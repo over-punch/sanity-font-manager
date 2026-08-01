@@ -174,6 +174,10 @@ export function createEmptyPlan(settings = {}) {
 			// type-tester buy button, so deriving it from a hidden (zero) price would silently ship
 			// unsellable fonts.
 			sell: true,
+			// Build DS-WEB web copies and display subsets after upload. Off by default: it needs BOTH
+			// the `fileInput.woff2_web`/`woff2_subset` schema fields and a subset-capable
+			// /api/sanity/fontWorker on the consuming site. See generateWebAndSubset.js.
+			webAndSubset: false,
 			preserveShortenedNames: false,
 			preserveFileNames: false,
 			...settings,

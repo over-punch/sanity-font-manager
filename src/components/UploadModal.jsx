@@ -54,6 +54,9 @@ export default function UploadModal({
 		// documents get, since it can no longer be derived from a price nobody sets.
 		pricing: defaults.pricing !== false,
 		sell: defaults.sell !== false,
+		// Opt-in per studio — see generateWebAndSubset.js for the two prerequisites.
+		webAndSubset: defaults.webAndSubset === true,
+		siteUrl: defaults.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
 		preserveShortenedNames: defaults.preserveShortenedNames ?? false,
 		preserveFileNames: defaults.preserveFileNames ?? false,
 	}));

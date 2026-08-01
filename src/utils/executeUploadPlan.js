@@ -5,6 +5,7 @@ import generateCssFile from './generateCssFile';
 import generateFontData from './generateFontData';
 import { parseVariableFontInstances } from './parseVariableFontInstances';
 import { updateTypefaceDocument } from './updateTypefaceDocument';
+import { generateWebAndSubset, collectFontsForGeneration } from './generateWebAndSubset';
 import {
 	FONT_STATUS,
 	EXECUTION_STATUS,
@@ -169,6 +170,30 @@ export async function executeUploadPlan({
 			if (onProgress) {
 				onProgress({ type: 'typeface-error', error: err.message });
 			}
+		}
+	}
+
+	// Build the DS-WEB web copies and display subsets, when the studio has opted in. Off by default:
+	// it needs both the `fileInput.woff2_web`/`woff2_subset` schema fields AND a subset-capable
+	// /api/sanity/fontWorker on the consuming site. Never fails the run — the fonts themselves are
+	// already uploaded, so a missing derived file is a warning, not a failed upload.
+	if (plan.settings?.webAndSubset) {
+		try {
+			// Read back what actually landed rather than trusting the plan, and skip any font that
+			// already has both derived files.
+			const ids = [...result.fontRefs, ...result.variableRefs].map((r) => r._ref).filter(Boolean);
+			const fonts = await collectFontsForGeneration({ client, ids });
+
+			const summary = await generateWebAndSubset({
+				client,
+				siteUrl: plan.settings.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
+				fonts,
+				onProgress: (p) => { if (onProgress) onProgress(p); },
+			});
+			result.webAndSubset = summary;
+		} catch (err) {
+			console.warn('Web/subset generation failed:', err.message);
+			result.webAndSubset = { error: err.message };
 		}
 	}
 

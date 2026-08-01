@@ -32,6 +32,7 @@ export { default as generateCssFile } from './utils/generateCssFile.js';
 export { default as generateFontData } from './utils/generateFontData.js';
 export { default as generateFontFile } from './utils/generateFontFile.js';
 export { default as generateSubset } from './utils/generateSubset.js';
+export { generateWebAndSubset, collectFontsForGeneration, requestWebAndSubset, verifyWebAndSubset } from './utils/generateWebAndSubset.js';
 export { default as parseVariableFontInstances } from './utils/parseVariableFontInstances.js';
 export { getEmptyFontKit } from './utils/getEmptyFontKit.js';
 export { SCRIPTS, SCRIPTS_OBJECT, HtmlDescription, DISCOUNT_REQUIREMENT_TYPES, DISCOUNT_REQUIREMENT_TYPES_OBJECT } from './utils/utils.js';

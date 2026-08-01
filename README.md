@@ -152,6 +152,42 @@ unsellable.
 
 With `pricing` left on (the default), behaviour is unchanged.
 
+### Web copies and display subsets (opt-in)
+
+A batch upload stores the font files you dropped in. It does **not** build the two derived WOFF2s —
+the DS-WEB fingerprinted `fileInput.woff2_web` used for web delivery, and the display
+`fileInput.woff2_subset` — because both are produced server-side by the consuming site.
+
+Switch it on per studio:
+
+```js
+{
+  ...createStylesField({ /* … */ }),
+  components: { input: BatchUploadFonts },
+  options: { defaults: { webAndSubset: true } },
+}
+```
+
+**Two prerequisites, both required.** Leave it off unless the studio has each:
+
+1. The `font` schema defines `fileInput.woff2_web` and `fileInput.woff2_subset`.
+2. The site implements `POST /api/sanity/fontWorker` handling `code: 'generate-subset'`. One call
+   produces *both* files and patches them onto the font document.
+
+Behaviour, in `utils/generateWebAndSubset.js`:
+
+- Runs after the fonts and the typeface document are written, so nothing above it can be affected.
+- Reads back what actually landed and **skips any font that already has both files**, so re-running a
+  partial upload only fills the gaps. Pass `force` to rebuild regardless.
+- Requests are throttled (4 at a time) — the worker does real subsetting per font.
+- The Studio and site are different origins, so the POST is `no-cors` and its response is opaque.
+  Success is therefore confirmed by **polling Sanity** until both fields appear, not by the fetch.
+- **Never fails the upload.** The fonts are already saved; a missing derived file is reported as a
+  warning via `result.webAndSubset` (`{ requested, skipped, done, pending }`).
+
+To backfill fonts uploaded before this existed, call `generateWebAndSubset` directly, or use the
+consuming site's own backfill script if it has one.
+
 ### Prerequisites the consumer provides
 
 This plugin supplies the upload UI, parsing, and field factories — it writes to `font` and `typeface` document types that **your studio defines**. Use the [Schema fields](#schema-fields) tables below as the contract for the document shapes the uploaders read and patch (the `font` document's `fileInput`/`metaData`/`metrics` objects, the `typeface` document's `styles.fonts`/`styles.variableFont` arrays). `createStylesField` builds the `styles` object for you; the surrounding `typeface` and `font` document types are yours to declare.
