@@ -291,6 +291,8 @@ async function buildFontPlanEntry({
 			userChoice: null,
 			selectedCandidate: null,
 			lookupFailed: resolution.lookupFailed || false,
+			// Records which _id was checked, so a later rename can be spotted as unverified.
+			resolvedForId: documentId,
 		};
 	} catch (err) {
 		console.warn('Document resolution failed for', documentId, err.message);

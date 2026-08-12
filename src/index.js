@@ -72,8 +72,11 @@ export {
 	PLAN_VERSION,
 	createFontDecisions,
 	createEmptyPlan,
+	willCreateDocument,
+	isResolutionStale,
 } from './utils/planTypes.js';
 export { planReducer } from './utils/planReducer.js';
+export { mergeFontEntries, findFileTypeCollisions } from './utils/mergeFontEntries.js';
 export { executionReducer, createInitialExecutionState } from './utils/executionReducer.js';
 
 // Upload modal components

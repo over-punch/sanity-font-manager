@@ -152,8 +152,39 @@ export function createFontDecisions({
 			userChoice: null,
 			selectedCandidate: null,
 			lookupFailed: false,
+			// The document ID this resolution was run against. Editing the title or ID afterwards
+			// moves the entry to a different _id that was never checked — see isResolutionStale.
+			resolvedForId: documentId,
 		},
 	};
+}
+
+/**
+ * Determines whether a font entry will create a new document rather than update an existing one.
+ * @param {object} entry - Font plan entry
+ * @returns {boolean}
+ */
+export function willCreateDocument(entry) {
+	const d = entry?.decisions?.existingDocument;
+	const choice = d?.userChoice;
+	const rec = d?.recommendation;
+	if (choice === 'update') return false;
+	if (!choice && (rec === RECOMMENDATION.USE_EXACT || rec === RECOMMENDATION.USE_CANDIDATE)) return false;
+	return true;
+}
+
+/**
+ * True when an entry is set to create a document at an ID that was never checked against Sanity.
+ * Resolution runs once per file while the plan is built; renaming a font afterwards changes the
+ * target _id, and a create at an ID that already exists would overwrite a live document.
+ * @param {object} entry - Font plan entry
+ * @returns {boolean}
+ */
+export function isResolutionStale(entry) {
+	const d = entry?.decisions?.existingDocument;
+	if (!d || !willCreateDocument(entry)) return false;
+	if (!d.resolvedForId) return false;
+	return d.resolvedForId !== entry.documentId;
 }
 
 /**

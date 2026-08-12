@@ -45,6 +45,9 @@ export async function executeUploadPlan({
 		updated: 0,
 		failed: 0,
 		skipped: 0,
+		// Fonts planned as creates that turned out to have a document already at that _id. They were
+		// patched rather than replaced — see the existence re-check in executeSingleFont.
+		convertedToUpdate: [],
 		failedFonts: [],
 		fontRefs: [],
 		variableRefs: [],
@@ -104,6 +107,10 @@ export async function executeUploadPlan({
 
 				if (fontResult.isNew) result.created++;
 				else result.updated++;
+
+				if (fontResult.convertedToUpdate) {
+					result.convertedToUpdate.push({ title: entry.title, documentId: entry.documentId });
+				}
 
 				// Track for typeface patch
 				if (entry.variableFont) {
@@ -344,20 +351,27 @@ export async function executeSingleFont({ entry, plan, client, progress, onProgr
 	// Create or update font document
 	fontProgress.status = EXECUTION_STATUS.CREATING_DOCUMENT;
 
-	// Resolution may have thrown (decision.lookupFailed) — then `shouldUpdate` is falsely false and a blind
-	// createOrReplace could DESTROY an existing document. Re-check existence before creating so we can never
-	// clobber; if the re-check also fails, skip this font rather than risk overwriting.
+	// A create runs `createOrReplace`, which destroys whatever already lives at that _id. Resolution
+	// alone cannot be trusted to rule that out: it runs once per file while the plan is built, so it
+	// is stale for any font renamed during review, and it may have thrown outright (lookupFailed).
+	// Re-check existence before EVERY create — if a document is there, patch it instead of replacing
+	// it, and if the re-check itself fails, refuse the font rather than risk overwriting.
 	let target = existingDoc;
 	let treatAsUpdate = shouldUpdate && !!existingDoc;
-	if (!treatAsUpdate && decision.lookupFailed) {
+	let convertedToUpdate = false;
+	if (!treatAsUpdate) {
 		try {
 			target = await client.fetch(
 				`*[_type == 'font' && (_id == $id || _id == $draftId || slug.current == $id)][0]{ _id, fileInput, metaData, metrics }`,
 				{ id: entry.documentId, draftId: `drafts.${entry.documentId}` }
 			);
-			if (target?._id) treatAsUpdate = true;
+			if (target?._id) {
+				treatAsUpdate = true;
+				convertedToUpdate = true;
+				console.warn(`A document already exists at "${entry.documentId}" — patching it instead of replacing it for "${entry.title}".`);
+			}
 		} catch (recheckErr) {
-			throw new Error(`Resolution failed and the existence re-check also failed for "${entry.title}" — skipped to avoid overwriting an existing document.`);
+			throw new Error(`The existence re-check failed for "${entry.title}" — skipped to avoid overwriting an existing document.`);
 		}
 	}
 
@@ -433,6 +447,9 @@ export async function executeSingleFont({ entry, plan, client, progress, onProgr
 				_weak: true,
 			},
 			isNew,
+			// True when the plan said "create" but a document was already sitting at that _id.
+			// Surfaced in the summary so a rename that collided with live data is visible.
+			convertedToUpdate,
 		};
 	} catch (err) {
 		fontProgress.status = EXECUTION_STATUS.ERROR;

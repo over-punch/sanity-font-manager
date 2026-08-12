@@ -446,3 +446,127 @@ describe('REMOVE_FONT', () => {
 		expect(result).toBe(state);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Conflict bookkeeping — flags must reflect the CURRENT plan, not a past one
+// ---------------------------------------------------------------------------
+
+/**
+ * Builds a two-font plan whose entries collide on documentId. The generated ID collides too,
+ * so a reset to suggestions leaves the collision in place — the real-world shape where two
+ * files parse to the same name.
+ */
+function planWithConflict() {
+	const conflicted = (tempId, title) => {
+		const e = mockFontEntry({ tempId, documentId: 'shared-id', title });
+		return {
+			...e,
+			_idConflict: true,
+			decisions: { ...e.decisions, documentId: { ...e.decisions.documentId, generated: 'shared-id' } },
+		};
+	};
+	const plan = createEmptyPlan();
+	plan.fonts['font-1'] = conflicted('font-1', 'Font One');
+	plan.fonts['font-2'] = conflicted('font-2', 'Font Two');
+	return plan;
+}
+
+describe('conflict recomputation', () => {
+	it('clears the survivor flag when the other half of a conflict is removed', () => {
+		const state = planWithConflict();
+		const result = planReducer(state, { type: 'REMOVE_FONT', tempId: 'font-2' });
+		expect(result.fonts['font-1']._idConflict).toBe(false);
+	});
+
+	it('keeps flagging a genuine conflict after an unrelated removal', () => {
+		const state = planWithConflict();
+		state.fonts['font-3'] = mockFontEntry({ tempId: 'font-3', documentId: 'other-id' });
+		const result = planReducer(state, { type: 'REMOVE_FONT', tempId: 'font-3' });
+		expect(result.fonts['font-1']._idConflict).toBe(true);
+		expect(result.fonts['font-2']._idConflict).toBe(true);
+	});
+
+	it('does not clear a real conflict when one entry is reset to suggestions', () => {
+		const state = planWithConflict();
+		const result = planReducer(state, { type: 'RESET_FONT_TO_SUGGESTIONS', tempId: 'font-1' });
+		// Both entries were generated with the same documentId, so reverting changes nothing.
+		expect(result.fonts['font-1']._idConflict).toBe(true);
+		expect(result.fonts['font-2']._idConflict).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// MERGE_FONTS
+// ---------------------------------------------------------------------------
+
+describe('MERGE_FONTS', () => {
+	/** Two entries for the same style whose formats arrived under different names */
+	function planWithSplitFormats() {
+		const plan = createEmptyPlan();
+		plan.fonts['ttf-1'] = mockFontEntry({
+			tempId: 'ttf-1',
+			documentId: 'omnes-vf',
+			title: 'Omnes VF',
+			subfamily: 'Regular',
+			files: [{ name: 'Omnes-VF.ttf' }],
+			glyphCount: 843,
+		});
+		plan.fonts['woff-1'] = mockFontEntry({
+			tempId: 'woff-1',
+			documentId: 'omnes-variable-vf',
+			title: 'Omnes Variable VF',
+			subfamily: 'Regular',
+			files: [{ name: 'Omnes-VF.woff2' }],
+			glyphCount: 12,
+		});
+		plan.subfamilyGroups = { Regular: { title: 'Regular', fontIds: ['ttf-1', 'woff-1'] } };
+		return plan;
+	}
+
+	it('collapses two entries into the primary, combining their files', () => {
+		const state = planWithSplitFormats();
+		const result = planReducer(state, {
+			type: 'MERGE_FONTS',
+			tempIds: ['ttf-1', 'woff-1'],
+			primaryTempId: 'ttf-1',
+		});
+
+		expect(Object.keys(result.fonts)).toEqual(['ttf-1']);
+		expect(result.fonts['ttf-1'].title).toBe('Omnes VF');
+		expect(result.fonts['ttf-1'].files.map(f => f.name)).toEqual(['Omnes-VF.ttf', 'Omnes-VF.woff2']);
+	});
+
+	it('rebuilds subfamily groups so the removed entry leaves no dangling id', () => {
+		const state = planWithSplitFormats();
+		const result = planReducer(state, {
+			type: 'MERGE_FONTS',
+			tempIds: ['ttf-1', 'woff-1'],
+			primaryTempId: 'ttf-1',
+		});
+
+		expect(result.subfamilyGroups.Regular.fontIds).toEqual(['ttf-1']);
+	});
+
+	it('clears the ID conflict that the merge resolves', () => {
+		const state = planWithConflict();
+		const result = planReducer(state, {
+			type: 'MERGE_FONTS',
+			tempIds: ['font-1', 'font-2'],
+			primaryTempId: 'font-1',
+		});
+
+		expect(Object.keys(result.fonts)).toEqual(['font-1']);
+		expect(result.fonts['font-1']._idConflict).toBe(false);
+	});
+
+	it('ignores a merge naming fewer than two existing entries', () => {
+		const state = planWithSplitFormats();
+		const result = planReducer(state, {
+			type: 'MERGE_FONTS',
+			tempIds: ['ttf-1', 'does-not-exist'],
+			primaryTempId: 'ttf-1',
+		});
+
+		expect(result).toBe(state);
+	});
+});

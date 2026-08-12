@@ -1,9 +1,9 @@
 // Per-font review row — table-style header with expandable detail panel
 
 import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
-import { Card, Stack, Flex, Box, Text, TextInput, Badge, Button, Select, Tooltip, Label } from '@sanity/ui';
+import { Card, Stack, Flex, Box, Text, TextInput, Badge, Button, Select, Tooltip, Label, Checkbox } from '@sanity/ui';
 import { ChevronDownIcon, ChevronRightIcon, TrashIcon, ResetIcon, InfoOutlineIcon } from '@sanity/icons';
-import { FONT_STATUS, RECOMMENDATION } from '../utils/planTypes';
+import { FONT_STATUS, RECOMMENDATION, isResolutionStale } from '../utils/planTypes';
 import ExistingDocumentResolver from './ExistingDocumentResolver';
 import { HighlightedName } from './HighlightedName';
 
@@ -16,7 +16,7 @@ const EXTENDED_TYPES = ['eot', 'svg', 'css', 'woff2_subset', 'woff2_web'];
  * Collapsible review card for a single font in the upload plan.
  * Table-style header row with weight/style/files/action columns.
  */
-const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded, typefaceTitle, price, pricing, sell }) {
+const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded, typefaceTitle, price, pricing, sell, selected = false, onToggleSelect }) {
 	const [expanded, setExpanded] = useState(false);
 	const [showAllFileTypes, setShowAllFileTypes] = useState(false);
 	const [showDocPreview, setShowDocPreview] = useState(false);
@@ -36,6 +36,8 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 
 	const isError = entry.status === FONT_STATUS.ERROR;
 	const hasConflict = entry._idConflict;
+	// Renamed after the Sanity lookup ran, so the new _id has never been checked for an occupant.
+	const resolutionStale = isResolutionStale(entry);
 	const resolution = entry.decisions?.existingDocument;
 	const isUpdate = resolution?.userChoice === 'update' ||
 		(!resolution?.userChoice && (resolution?.recommendation === RECOMMENDATION.USE_EXACT || resolution?.recommendation === RECOMMENDATION.USE_CANDIDATE));
@@ -120,6 +122,12 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 		dispatch({ type: 'REMOVE_FONT', tempId: entry.tempId });
 	}, [entry.tempId, dispatch]);
 
+	/** Tick for merging without toggling the card open */
+	const handleSelectClick = useCallback((e) => {
+		e.stopPropagation();
+		if (onToggleSelect) onToggleSelect(entry.tempId);
+	}, [entry.tempId, onToggleSelect]);
+
 	/** Format source string — converts nameId references to readable format, appends user override if present */
 	const formatSource = (decision) => {
 		if (!decision) return null;
@@ -138,7 +146,21 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 
 	return (
 		<Card border radius={2} tone={cardTone} style={{ marginBottom: -1 }}>
-			{/* Header row — table-style columns */}
+			{/* Header row — table-style columns. The merge checkbox sits outside the expand button
+			    so ticking it never opens the card and no control is nested inside a button. */}
+			<Flex align="center">
+				{onToggleSelect && (
+					<Box paddingLeft={2} style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+						<Checkbox
+							checked={selected}
+							disabled={isError}
+							onChange={handleSelectClick}
+							onClick={(e) => e.stopPropagation()}
+							aria-label={`Select ${entry.title || entry.sourceFileName} for merging`}
+							style={{ cursor: isError ? 'default' : 'pointer' }}
+						/>
+					</Box>
+				)}
 			<Box
 				as="button"
 				onClick={() => !isError && setExpanded(v => !v)}
@@ -177,6 +199,7 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 					</Box>
 				</Flex>
 			</Box>
+			</Flex>
 
 			{/* Error message */}
 			{isError && (
@@ -289,6 +312,13 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 							)}
 							{isCreateNewOverride && !hasConflict && (
 								<Text size={0} tone="caution">Creating new document — edit the ID to avoid overwriting the existing document</Text>
+							)}
+							{resolutionStale && (
+								<Text size={0} tone="caution" style={{ lineHeight: 1.6 }}>
+									Renamed since the Sanity lookup ran, so this ID has not been checked. If a document
+									already lives there it will be updated rather than replaced — its price, description
+									and other curated fields are kept.
+								</Text>
 							)}
 							{!docIdEditable && (
 								<Text size={0} muted>Auto-derived from font title</Text>

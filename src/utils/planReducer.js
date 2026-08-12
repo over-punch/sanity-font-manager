@@ -3,6 +3,7 @@
 import { PLAN_PHASE, FONT_STATUS, PROCESSING_OWNED_FIELDS } from './planTypes';
 import { sanitizeForSanityId } from './sanitizeForSanityId';
 import { retitleAllFonts } from './retitleFontEntries';
+import { mergeFontEntries } from './mergeFontEntries';
 
 /** Valid phase transitions — any phase can transition to 'idle' (reset) */
 const VALID_TRANSITIONS = {
@@ -391,9 +392,10 @@ export function planReducer(state, action) {
 				fonts[tempId] = resetFontToSuggestions(fonts[tempId]);
 			}
 
-			// Rebuild subfamily groups after resetting
+			// Rebuild subfamily groups after resetting. Reverting a title can both create a
+			// collision and clear one, so conflicts are recomputed rather than left as they were.
 			const subfamilyGroups = rebuildSubfamilyGroups(fonts);
-			return { ...state, fonts, subfamilyGroups };
+			return { ...state, fonts: markConflicts(fonts), subfamilyGroups };
 		}
 
 		case 'RESET_FONT_TO_SUGGESTIONS': {
@@ -404,7 +406,31 @@ export function planReducer(state, action) {
 			const reset = resetFontToSuggestions(font);
 			const fonts = { ...state.fonts, [tempId]: reset };
 			const subfamilyGroups = rebuildSubfamilyGroups(fonts);
-			return { ...state, fonts, subfamilyGroups };
+			return { ...state, fonts: markConflicts(fonts), subfamilyGroups };
+		}
+
+		// ---------------------------------------------------------------
+		// Merge
+		// ---------------------------------------------------------------
+
+		case 'MERGE_FONTS': {
+			const { tempIds, primaryTempId, fileSources } = action;
+			const entries = (tempIds || []).map(id => state.fonts[id]).filter(Boolean);
+			if (entries.length < 2) {
+				console.warn('MERGE_FONTS needs at least two existing entries');
+				return state;
+			}
+
+			const { merged } = mergeFontEntries(entries, { primaryTempId, fileSources });
+
+			const fonts = { ...state.fonts };
+			for (const entry of entries) {
+				delete fonts[entry.tempId];
+			}
+			fonts[merged.tempId] = merged;
+
+			const subfamilyGroups = rebuildSubfamilyGroups(fonts);
+			return { ...state, fonts: markConflicts(fonts), subfamilyGroups };
 		}
 
 		case 'REMOVE_FONT': {
@@ -422,7 +448,9 @@ export function planReducer(state, action) {
 				}
 			}
 
-			return { ...state, fonts: remainingFonts, subfamilyGroups };
+			// Removing one half of a duplicate pair resolves the conflict — without this the
+			// survivor keeps a flag nothing can clear and the upload button stays disabled.
+			return { ...state, fonts: markConflicts(remainingFonts), subfamilyGroups };
 		}
 
 		default:
@@ -484,13 +512,18 @@ function moveFontBetweenGroups(state, tempId, fromKey, toKey) {
 	return { ...state, subfamilyGroups: groups };
 }
 
-/** Updates a font and checks for documentId collisions across all fonts */
-function updateFontAndCheckConflicts(state, tempId, updatedFont) {
-	const fonts = { ...state.fonts, [tempId]: updatedFont };
-
-	// Clear old conflicts and detect new ones
+/**
+ * Recomputes `_idConflict` across a whole fonts map. Always call this after any action that
+ * adds, removes, or renames an entry — a flag left over from a pair that no longer exists
+ * blocks the upload button with nothing left on screen to fix.
+ * @param {object} fontsMap - plan.fonts
+ * @returns {object} New fonts map with accurate conflict flags
+ */
+function markConflicts(fontsMap) {
+	const fonts = {};
 	const idMap = {};
-	for (const [id, font] of Object.entries(fonts)) {
+
+	for (const [id, font] of Object.entries(fontsMap)) {
 		fonts[id] = { ...font, _idConflict: false };
 		const docId = font.documentId;
 		if (!idMap[docId]) {
@@ -500,7 +533,6 @@ function updateFontAndCheckConflicts(state, tempId, updatedFont) {
 		}
 	}
 
-	// Mark conflicts
 	for (const ids of Object.values(idMap)) {
 		if (ids.length > 1) {
 			for (const id of ids) {
@@ -509,7 +541,12 @@ function updateFontAndCheckConflicts(state, tempId, updatedFont) {
 		}
 	}
 
-	return { ...state, fonts };
+	return fonts;
+}
+
+/** Updates a font and checks for documentId collisions across all fonts */
+function updateFontAndCheckConflicts(state, tempId, updatedFont) {
+	return { ...state, fonts: markConflicts({ ...state.fonts, [tempId]: updatedFont }) };
 }
 
 /** Rebuilds subfamily groups from the fonts map */

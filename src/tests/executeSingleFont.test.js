@@ -114,14 +114,39 @@ describe('executeSingleFont', () => {
 		expect(res.isNew).toBe(false);
 	});
 
-	it('throws (skips the font) when resolution failed AND the existence re-check also fails (#2 safety)', async () => {
+	it('throws (skips the font) when the existence re-check fails (#2 safety)', async () => {
 		const decision = { recommendation: RECOMMENDATION.CREATE, userChoice: null, lookupFailed: true, exact: null, candidates: [] };
 		const { client, created } = makeClient({ recheckThrows: true });
 
 		await expect(
 			executeSingleFont({ entry: makeEntry(decision), plan: PLAN, client, progress: makeProgress(), onProgress: null }),
-		).rejects.toThrow(/re-check also failed/);
+		).rejects.toThrow(/existence re-check failed/);
 		expect(created).toHaveLength(0); // never risked an overwrite
+	});
+
+	it('patches instead of replacing when a rename lands on a live document', async () => {
+		// Resolution ran against the ORIGINAL id and found nothing, so the plan says "create".
+		// The curator then renamed the font onto an id that does hold a document.
+		const decision = {
+			recommendation: RECOMMENDATION.CREATE,
+			userChoice: null,
+			lookupFailed: false,
+			exact: null,
+			candidates: [],
+			resolvedForId: 'some-other-id',
+		};
+		const { client, patches, created } = makeClient({
+			recheckDoc: { _id: 'font-x', fileInput: { woff2: { _type: 'file', asset: { _ref: 'live-woff2' } } }, metaData: {}, metrics: {} },
+		});
+
+		const res = await executeSingleFont({ entry: makeEntry(decision), plan: PLAN, client, progress: makeProgress(), onProgress: null });
+
+		expect(created).toHaveLength(0); // the live document survived
+		expect(patches).toHaveLength(1);
+		expect(patches[0].payload).not.toHaveProperty('price'); // curator fields untouched
+		expect(patches[0].payload.fileInput.woff2.asset._ref).toBe('live-woff2');
+		expect(res.isNew).toBe(false);
+		expect(res.convertedToUpdate).toBe(true);
 	});
 
 	it('creates a full new document (with curator fields) when there is genuinely no existing doc', async () => {
@@ -130,7 +155,7 @@ describe('executeSingleFont', () => {
 
 		const res = await executeSingleFont({ entry: makeEntry(decision), plan: PLAN, client, progress: makeProgress(), onProgress: null });
 
-		expect(client.fetch).not.toHaveBeenCalled(); // no lookupFailed → no re-check
+		expect(client.fetch).toHaveBeenCalledTimes(1); // every create is verified first
 		expect(patches).toHaveLength(0);
 		expect(created).toHaveLength(1);
 		expect(created[0]).toMatchObject({
@@ -144,5 +169,6 @@ describe('executeSingleFont', () => {
 			normalWeight: true,
 		});
 		expect(res.isNew).toBe(true);
+		expect(res.convertedToUpdate).toBe(false);
 	});
 });

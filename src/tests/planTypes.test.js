@@ -11,6 +11,8 @@ import {
 	backoffWithJitter,
 	createFontDecisions,
 	createEmptyPlan,
+	willCreateDocument,
+	isResolutionStale,
 } from '../utils/planTypes';
 
 describe('planTypes constants', () => {
@@ -126,5 +128,52 @@ describe('createEmptyPlan', () => {
 		expect(plan.settings.price).toBe(50);
 		expect(plan.settings.preserveFileNames).toBe(true);
 		expect(plan.settings.preserveShortenedNames).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Resolution staleness — a rename moves the write to an unverified _id
+// ---------------------------------------------------------------------------
+
+describe('willCreateDocument / isResolutionStale', () => {
+	/** Entry with the given existing-document decision */
+	const withDecision = (documentId, existingDocument) => ({
+		documentId,
+		decisions: { existingDocument },
+	});
+
+	it('treats an unresolved entry as a create', () => {
+		const entry = withDecision('omnes-vf', { recommendation: RECOMMENDATION.CREATE, resolvedForId: 'omnes-vf' });
+		expect(willCreateDocument(entry)).toBe(true);
+		expect(isResolutionStale(entry)).toBe(false);
+	});
+
+	it('flags a create whose ID no longer matches the one that was looked up', () => {
+		const entry = withDecision('omnes-vf', { recommendation: RECOMMENDATION.CREATE, resolvedForId: 'omnes-variable-vf' });
+		expect(isResolutionStale(entry)).toBe(true);
+	});
+
+	it('does not flag an entry that will update an existing document', () => {
+		const entry = withDecision('omnes-vf', {
+			recommendation: RECOMMENDATION.USE_EXACT,
+			resolvedForId: 'something-else',
+		});
+		expect(willCreateDocument(entry)).toBe(false);
+		expect(isResolutionStale(entry)).toBe(false);
+	});
+
+	it('treats an explicit create override as a create', () => {
+		const entry = withDecision('omnes-vf', {
+			recommendation: RECOMMENDATION.USE_EXACT,
+			userChoice: 'create',
+			resolvedForId: 'omnes-vf',
+		});
+		expect(willCreateDocument(entry)).toBe(true);
+		expect(isResolutionStale(entry)).toBe(false);
+	});
+
+	it('stays quiet on plans built before resolvedForId existed', () => {
+		const entry = withDecision('omnes-vf', { recommendation: RECOMMENDATION.CREATE });
+		expect(isResolutionStale(entry)).toBe(false);
 	});
 });

@@ -26,6 +26,9 @@ export default function BulkActions({
 	allExpanded,
 	onToggleExpandAll,
 	visibleTempIds,
+	selectedCount = 0,
+	onMergeSelected,
+	onClearSelection,
 }) {
 	const fontEntries = useMemo(() => Object.values(fonts), [fonts]);
 	const fontCount = fontEntries.length;
@@ -89,6 +92,30 @@ export default function BulkActions({
 					))}
 				</Select>
 			</Flex>
+
+			{/* Merge — appears once two or more entries are ticked */}
+			{selectedCount > 0 && (
+				<Flex align="center" gap={1}>
+					<Button
+						mode="default"
+						tone="primary"
+						fontSize={0}
+						padding={2}
+						text={`Merge ${selectedCount}`}
+						disabled={selectedCount < 2}
+						onClick={onMergeSelected}
+						style={{ cursor: selectedCount < 2 ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+					/>
+					<Button
+						mode="bleed"
+						fontSize={0}
+						padding={2}
+						text="Clear"
+						onClick={onClearSelection}
+						style={{ cursor: 'pointer' }}
+					/>
+				</Flex>
+			)}
 
 			{/* Visible count */}
 			{visibleCount !== fontCount && (

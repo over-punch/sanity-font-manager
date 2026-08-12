@@ -7,6 +7,7 @@ import { PLAN_PHASE, FONT_STATUS, RECOMMENDATION } from '../utils/planTypes';
 import FontReviewCard from './FontReviewCard';
 import BulkActions from './BulkActions';
 import PriceInput from './PriceInput';
+import MergeFontsDialog from './MergeFontsDialog';
 
 /** Determines whether a font entry will create or update a document */
 function isUpdateEntry(entry) {
@@ -43,6 +44,10 @@ export default function UploadStep2Review({
 	const [allExpanded, setAllExpanded] = useState(false);
 	const [sortBy, setSortBy] = useState('weight');
 	const [sortDir, setSortDir] = useState('asc');
+
+	// Merge selection — tempIds ticked for merging, and the entries currently in the dialog
+	const [selectedIds, setSelectedIds] = useState([]);
+	const [mergeCandidates, setMergeCandidates] = useState(null);
 
 	const fontEntries = useMemo(() => Object.values(plan.fonts), [plan.fonts]);
 	const processedCount = fontEntries.filter(f => f.status === FONT_STATUS.PROCESSED).length;
@@ -134,6 +139,42 @@ export default function UploadStep2Review({
 
 	const visibleTempIds = useMemo(() => visibleEntries.map(e => e.tempId), [visibleEntries]);
 	const hasConflicts = fontEntries.some(f => f._idConflict);
+
+	// Conflicting entries grouped by the document ID they fight over — each group is one merge.
+	const conflictGroups = useMemo(() => {
+		const groups = {};
+		for (const entry of fontEntries) {
+			if (!entry._idConflict) continue;
+			if (!groups[entry.documentId]) groups[entry.documentId] = [];
+			groups[entry.documentId].push(entry);
+		}
+		return groups;
+	}, [fontEntries]);
+
+	/** Tick or untick an entry for merging */
+	const handleToggleSelect = useCallback((tempId) => {
+		setSelectedIds(prev => prev.includes(tempId) ? prev.filter(id => id !== tempId) : [...prev, tempId]);
+	}, []);
+
+	const handleClearSelection = useCallback(() => setSelectedIds([]), []);
+
+	/** Open the merge dialog for the ticked entries */
+	const handleMergeSelected = useCallback(() => {
+		const entries = selectedIds.map(id => plan.fonts[id]).filter(Boolean);
+		if (entries.length >= 2) setMergeCandidates(entries);
+	}, [selectedIds, plan.fonts]);
+
+	/** Open the merge dialog for one conflicting document ID */
+	const handleMergeConflictGroup = useCallback((documentId) => {
+		const entries = conflictGroups[documentId] || [];
+		if (entries.length >= 2) setMergeCandidates(entries);
+	}, [conflictGroups]);
+
+	const handleMergeConfirm = useCallback(({ tempIds, primaryTempId, fileSources }) => {
+		dispatch({ type: 'MERGE_FONTS', tempIds, primaryTempId, fileSources });
+		setSelectedIds([]);
+		setMergeCandidates(null);
+	}, [dispatch]);
 
 	/** Sort comparator based on current sortBy/sortDir */
 	const sortEntries = useCallback((a, b) => {
@@ -373,6 +414,9 @@ export default function UploadStep2Review({
 					allExpanded={allExpanded}
 					onToggleExpandAll={handleToggleExpandAll}
 					visibleTempIds={visibleTempIds}
+					selectedCount={selectedIds.length}
+					onMergeSelected={handleMergeSelected}
+					onClearSelection={handleClearSelection}
 				/>
 			)}
 
@@ -399,6 +443,8 @@ export default function UploadStep2Review({
 					paddingY={1}
 					style={{ borderBottom: '1px solid var(--card-border-color)', userSelect: 'none' }}
 				>
+					{/* Spacers for the merge checkbox and the expand chevron */}
+					<Box style={{ width: 18 }} />
 					<Box style={{ width: 20 }} />
 					{[
 						{ key: 'title', label: 'Font Title', style: { flex: 1, cursor: 'pointer' } },
@@ -443,6 +489,8 @@ export default function UploadStep2Review({
 								price={plan.settings?.price}
 								pricing={plan.settings?.pricing}
 								sell={plan.settings?.sell}
+								selected={selectedIds.includes(entry.tempId)}
+								onToggleSelect={handleToggleSelect}
 							/>
 						))}
 					</Stack>
@@ -465,6 +513,46 @@ export default function UploadStep2Review({
 						))}
 					</Stack>
 				</Card>
+			)}
+
+			{/* Duplicate IDs — offer the merge that resolves each one. Two entries usually mean one
+			    style whose formats parsed under slightly different names, not two documents. */}
+			{isReviewing && Object.keys(conflictGroups).length > 0 && (
+				<Card tone="caution" border padding={3} radius={2}>
+					<Stack space={3}>
+						<Text size={1} weight="semibold">Duplicate document IDs</Text>
+						{Object.entries(conflictGroups).map(([documentId, group]) => (
+							<Flex key={documentId} align="center" justify="space-between" gap={3}>
+								<Stack space={1} style={{ minWidth: 0 }}>
+									<Text size={0} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{documentId}</Text>
+									<Text size={0} muted>{group.map(e => e.title).join('  ·  ')}</Text>
+								</Stack>
+								<Button
+									mode="ghost"
+									tone="primary"
+									fontSize={0}
+									padding={2}
+									text={`Merge ${group.length}`}
+									onClick={() => handleMergeConflictGroup(documentId)}
+									style={{ flexShrink: 0, cursor: 'pointer' }}
+								/>
+							</Flex>
+						))}
+						<Text size={0} muted style={{ lineHeight: 1.6 }}>
+							Merging keeps one entry's reviewed values and adds the others' font files to it.
+							Give them different IDs instead if they really are separate documents.
+						</Text>
+					</Stack>
+				</Card>
+			)}
+
+			{/* Merge dialog */}
+			{mergeCandidates && (
+				<MergeFontsDialog
+					entries={mergeCandidates}
+					onClose={() => setMergeCandidates(null)}
+					onConfirm={handleMergeConfirm}
+				/>
 			)}
 
 			{/* Upload button */}
