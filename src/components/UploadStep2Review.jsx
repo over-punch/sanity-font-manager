@@ -9,6 +9,11 @@ import BulkActions from './BulkActions';
 import PriceInput from './PriceInput';
 import MergeFontsDialog from './MergeFontsDialog';
 
+/** True when an entry carries a TTF or OTF — the only files metadata generation can read */
+function hasOutlineFile(entry) {
+	return (entry.files || []).some(f => /\.(ttf|otf)$/i.test(f.name || ''));
+}
+
 /** Determines whether a font entry will create or update a document */
 function isUpdateEntry(entry) {
 	const d = entry.decisions?.existingDocument;
@@ -27,6 +32,7 @@ export default function UploadStep2Review({
 	onReadyToUpload,
 	onStartExecution,
 	processingCancelled,
+	onRetryFont,
 }) {
 	const isProcessing = plan.phase === PLAN_PHASE.PROCESSING;
 	const isReviewing = plan.phase === PLAN_PHASE.REVIEWING || plan.phase === PLAN_PHASE.READY;
@@ -114,6 +120,12 @@ export default function UploadStep2Review({
 			entries = entries.filter(f => f.status === FONT_STATUS.ERROR);
 		} else if (filterBy === 'conflict') {
 			entries = entries.filter(f => f._idConflict);
+		} else if (filterBy === 'missing-title') {
+			entries = entries.filter(f => f.status !== FONT_STATUS.ERROR && !f.title?.trim());
+		} else if (filterBy === 'missing-id') {
+			entries = entries.filter(f => f.status !== FONT_STATUS.ERROR && !f.documentId?.trim());
+		} else if (filterBy === 'no-outline') {
+			entries = entries.filter(f => f.status !== FONT_STATUS.ERROR && !hasOutlineFile(f));
 		} else if (filterBy === 'style:italic') {
 			entries = entries.filter(f => f.style === 'Italic' && f.status !== FONT_STATUS.ERROR);
 		} else if (filterBy === 'style:regular') {
@@ -241,30 +253,57 @@ export default function UploadStep2Review({
 		return sorted;
 	}, [visibleEntries]);
 
-	// Validation
+	// Validation — each entry carries the filter that isolates the fonts it refers to, so the
+	// message is a way to reach them rather than a hunt through the list.
 	const validationErrors = useMemo(() => {
 		const errors = [];
 		const uploadable = fontEntries.filter(f => f.status !== FONT_STATUS.ERROR);
+		const plural = (n) => (n === 1 ? '' : 's');
+
 		const missingTitles = uploadable.filter(f => !f.title || f.title.trim() === '');
 		if (missingTitles.length > 0) {
-			errors.push(`${missingTitles.length} font${missingTitles.length === 1 ? '' : 's'} missing a title`);
+			errors.push({ message: `${missingTitles.length} font${plural(missingTitles.length)} missing a title`, filter: 'missing-title' });
 		}
 		const missingIds = uploadable.filter(f => !f.documentId || f.documentId.trim() === '');
 		if (missingIds.length > 0) {
-			errors.push(`${missingIds.length} font${missingIds.length === 1 ? '' : 's'} missing a document ID`);
+			errors.push({ message: `${missingIds.length} font${plural(missingIds.length)} missing a document ID`, filter: 'missing-id' });
 		}
 		if (hasConflicts) {
 			const conflictCount = uploadable.filter(f => f._idConflict).length;
-			errors.push(`${conflictCount} font${conflictCount === 1 ? '' : 's'} with duplicate document IDs`);
+			errors.push({ message: `${conflictCount} font${plural(conflictCount)} with duplicate document IDs`, filter: 'conflict' });
 		}
 		return errors;
 	}, [fontEntries, hasConflicts]);
+
+	// Non-blocking warnings — the upload succeeds, but the result is not what most people expect.
+	const validationWarnings = useMemo(() => {
+		const warnings = [];
+		const uploadable = fontEntries.filter(f => f.status !== FONT_STATUS.ERROR);
+		const plural = (n) => (n === 1 ? '' : 's');
+
+		const noOutline = uploadable.filter(f => !hasOutlineFile(f));
+		if (noOutline.length > 0) {
+			warnings.push({
+				message: `${noOutline.length} font${plural(noOutline.length)} without a TTF or OTF — written without metrics, character set or variable instances`,
+				filter: 'no-outline',
+			});
+		}
+
+		const duplicateCount = uploadable.reduce((n, f) => n + (f.duplicateFiles?.length || 0), 0);
+		if (duplicateCount > 0) {
+			warnings.push({
+				message: `${duplicateCount} file${plural(duplicateCount)} skipped as a duplicate format`,
+				filter: null,
+			});
+		}
+		return warnings;
+	}, [fontEntries]);
 
 	const canUploadValidation = isReviewing && processedCount > 0 && validationErrors.length === 0;
 
 	const handleUpload = useCallback(() => {
 		if (validationErrors.length > 0) {
-			window.alert('Please fix the following before uploading:\n\n• ' + validationErrors.join('\n• '));
+			window.alert('Please fix the following before uploading:\n\n• ' + validationErrors.map(e => e.message).join('\n• '));
 			return;
 		}
 		onStartExecution();
@@ -381,7 +420,11 @@ export default function UploadStep2Review({
 										checked={localPreserveFileNames}
 										onChange={(e) => {
 											setLocalPreserveFileNames(e.target.checked);
-											dispatch({ type: 'SET_SETTINGS', settings: { preserveFileNames: e.target.checked } });
+											dispatch({
+												type: 'SET_SETTINGS',
+												settings: { preserveFileNames: e.target.checked },
+												typefaceTitle: plan.settings?.typefaceTitle || '',
+											});
 										}}
 									/>
 									<Tooltip
@@ -491,6 +534,7 @@ export default function UploadStep2Review({
 								sell={plan.settings?.sell}
 								selected={selectedIds.includes(entry.tempId)}
 								onToggleSelect={handleToggleSelect}
+								onRetry={onRetryFont}
 							/>
 						))}
 					</Stack>
@@ -504,12 +548,47 @@ export default function UploadStep2Review({
 				</Card>
 			)}
 
-			{/* Validation errors */}
+			{/* Validation errors — click one to filter the list down to the fonts it names */}
 			{isReviewing && validationErrors.length > 0 && (
+				<Card tone="critical" border padding={2} radius={2}>
+					<Stack space={1}>
+						{validationErrors.map(err => (
+							<Flex key={err.filter} align="center" justify="space-between" gap={2}>
+								<Text size={0} tone="critical">• {err.message}</Text>
+								<Button
+									mode="bleed"
+									tone="critical"
+									fontSize={0}
+									padding={1}
+									text="Show"
+									onClick={() => setFilterBy(err.filter)}
+									style={{ cursor: 'pointer', flexShrink: 0 }}
+								/>
+							</Flex>
+						))}
+					</Stack>
+				</Card>
+			)}
+
+			{/* Warnings that do not block the upload */}
+			{isReviewing && validationWarnings.length > 0 && (
 				<Card tone="caution" border padding={2} radius={2}>
 					<Stack space={1}>
-						{validationErrors.map((err, i) => (
-							<Text key={i} size={0} tone="caution">• {err}</Text>
+						{validationWarnings.map(warn => (
+							<Flex key={warn.message} align="center" justify="space-between" gap={2}>
+								<Text size={0} tone="caution">• {warn.message}</Text>
+								{warn.filter && (
+									<Button
+										mode="bleed"
+										tone="caution"
+										fontSize={0}
+										padding={1}
+										text="Show"
+										onClick={() => setFilterBy(warn.filter)}
+										style={{ cursor: 'pointer', flexShrink: 0 }}
+									/>
+								)}
+							</Flex>
 						))}
 					</Stack>
 				</Card>

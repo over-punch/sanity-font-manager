@@ -116,18 +116,72 @@ export function retitleFontEntry(entry, preserveShortenedNames, typefaceTitle) {
 }
 
 /**
+ * Strips the extension from a font file name and normalises it into a display title —
+ * hyphens to spaces, camelCase split, whitespace collapsed. Mirrors buildUploadPlan.
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function titleFromFileName(fileName) {
+	return (fileName || '')
+		.replace(/\.(ttf|otf|woff2?|eot|svg)$/i, '')
+		.replace(/-/g, ' ')
+		.replace(/([a-z])([A-Z])/g, '$1 $2')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * Re-derive a single entry's title and document ID from its source file name.
+ * Entries the curator has already retitled are left alone.
+ *
+ * @param {object} entry - Font plan entry
+ * @returns {object} Updated entry, or the same reference when nothing changed
+ */
+export function retitleFontEntryFromFileName(entry) {
+	if (!entry || !entry.sourceFileName) return entry;
+	if (entry.decisions?.title?.userOverride) return entry;
+
+	const fontTitle = titleFromFileName(entry.sourceFileName);
+	if (!fontTitle) return entry;
+
+	const documentId = sanitizeForSanityId(fontTitle);
+	const originalFilename = entry.sourceFileName.replace(/\.(ttf|otf|woff2?|eot|svg)$/i, '');
+
+	if (entry.title === fontTitle && entry.documentId === documentId && entry.originalFilename === originalFilename) {
+		return entry;
+	}
+
+	return {
+		...entry,
+		title: fontTitle,
+		documentId,
+		originalFilename,
+		decisions: {
+			...entry.decisions,
+			title: { ...entry.decisions.title, source: 'filename', processed: fontTitle },
+			documentId: { ...entry.decisions.documentId, generated: documentId },
+		},
+	};
+}
+
+/**
  * Retitle all font entries in a plan. Returns a new fonts map.
  * Runs collision detection after retitling.
  *
  * @param {object} fonts - plan.fonts map
  * @param {boolean} preserveShortenedNames
  * @param {string} typefaceTitle
+ * @param {boolean} [preserveFileNames] - Derive titles from file names instead of font metadata
  * @returns {object} New fonts map with updated titles and _idConflict flags
  */
-export function retitleAllFonts(fonts, preserveShortenedNames, typefaceTitle) {
+export function retitleAllFonts(fonts, preserveShortenedNames, typefaceTitle, preserveFileNames = false) {
 	const updated = {};
 	for (const [tempId, entry] of Object.entries(fonts)) {
-		updated[tempId] = retitleFontEntry(entry, preserveShortenedNames, typefaceTitle);
+		updated[tempId] = preserveFileNames
+			? retitleFontEntryFromFileName(entry)
+			// Switching file names back off drops the filename-derived title AND the asset naming
+			// hint, so the metadata-derived title returns intact.
+			: { ...retitleFontEntry(entry, preserveShortenedNames, typefaceTitle), originalFilename: null };
 	}
 
 	// Run collision detection

@@ -123,6 +123,26 @@ export default function UploadSummary({
 								</Badge>
 							)}
 						</Flex>
+
+						{/* Fonts planned as new that turned out to already exist. They were patched
+						    rather than replaced, so nothing curated was lost — but the curator asked
+						    for a new document and did not get one. */}
+						{result.convertedToUpdate?.length > 0 && (
+							<Stack space={2}>
+								<Text size={1} weight="semibold" >
+									{result.convertedToUpdate.length} font{result.convertedToUpdate.length === 1 ? '' : 's'} already existed
+								</Text>
+								<Text size={0} muted style={{ lineHeight: 1.6 }}>
+									These were set to create a new document, but one was already at that ID. They were
+									updated instead, keeping price, description and other curated fields.
+								</Text>
+								{result.convertedToUpdate.map(f => (
+									<Text key={f.documentId} size={0} style={{ wordBreak: 'break-all' }}>
+										{f.title} <span style={{ opacity: 0.6, fontFamily: 'monospace' }}>{f.documentId}</span>
+									</Text>
+								))}
+							</Stack>
+						)}
 					</Stack>
 				</Card>
 			)}

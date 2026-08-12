@@ -2,7 +2,8 @@
 
 import { nanoid } from 'nanoid';
 import { parseFont } from './parseFont';
-import { readFontFile, extractFontMetadata, determineWeight } from './processFontFiles';
+import { readFontFile, extractFontMetadata, determineWeight, getWebfontFallbackMetadata } from './processFontFiles';
+import { fileTypeOf } from './mergeFontEntries';
 import {
 	getNameString,
 	getFontMetadata,
@@ -72,6 +73,7 @@ export async function buildUploadPlan({
 			const entry = await buildFontPlanEntry({
 				file,
 				font,
+				files,
 				typefaceTitle,
 				settings: plan.settings,
 				weightKeywordList,
@@ -82,7 +84,22 @@ export async function buildUploadPlan({
 			// Merge into plan — if same documentId, merge files
 			const existingKey = Object.keys(plan.fonts).find(k => plan.fonts[k].documentId === entry.documentId);
 			if (existingKey) {
-				plan.fonts[existingKey].files = [...plan.fonts[existingKey].files, ...entry.files];
+				// One document can only carry one file per format. A second file of a format already
+				// held would be uploaded and then silently overwritten in fileInput, so it is kept
+				// aside and reported instead.
+				const existing = plan.fonts[existingKey];
+				const heldTypes = new Set(existing.files.map(fileTypeOf).filter(Boolean));
+				const incomingType = fileTypeOf(file);
+
+				if (incomingType && heldTypes.has(incomingType)) {
+					existing.duplicateFiles = [
+						...(existing.duplicateFiles || []),
+						{ fileName: file.name, type: incomingType },
+					];
+					console.warn(`Ignoring ${file.name} — a ${incomingType.toUpperCase()} is already assigned to "${existing.title}".`);
+				} else {
+					existing.files = [...existing.files, ...entry.files];
+				}
 			} else {
 				plan.fonts[entry.tempId] = entry;
 
@@ -167,12 +184,18 @@ export async function buildUploadPlan({
 async function buildFontPlanEntry({
 	file,
 	font,
+	files = [],
 	typefaceTitle,
 	settings,
 	weightKeywordList,
 	italicKeywordList,
 	client,
 }) {
+	// A webfont whose name table is missing or corrupt borrows names from its TTF companion in the
+	// same batch. Without this, the same style parses to a different title per format and splits
+	// into separate review entries that then collide on document ID.
+	const ttfFallbackMeta = await getWebfontFallbackMetadata(file, font, files);
+
 	// Extract metadata using existing processFontFiles helpers
 	const { weightName, subfamilyName, fontTitle, style, italicKW, variableFont } = extractFontMetadata(
 		font,
@@ -180,6 +203,7 @@ async function buildFontPlanEntry({
 		weightKeywordList,
 		italicKeywordList,
 		settings.preserveShortenedNames,
+		ttfFallbackMeta,
 	);
 
 	// Determine title and ID based on preserveFileNames setting
@@ -200,13 +224,14 @@ async function buildFontPlanEntry({
 	const tempId = documentId + '-' + nanoid(6);
 	const weight = Number(determineWeight(font, weightName));
 
-	// Build title alternatives from all name sources
+	// Build title alternatives from all name sources, falling back to the TTF companion's records
+	// when this file's own name table came back empty.
 	const titleAlternatives = [
-		{ value: getNameString(font, 1), source: 'nameId1-familyName' },
-		{ value: getNameString(font, 4), source: 'nameId4-fullName' },
+		{ value: getNameString(font, 1) || ttfFallbackMeta?.familyName, source: 'nameId1-familyName' },
+		{ value: getNameString(font, 4) || ttfFallbackMeta?.fullName, source: 'nameId4-fullName' },
 		{ value: getNameString(font, 6), source: 'nameId6-postscriptName' },
-		{ value: getNameString(font, 16), source: 'nameId16-preferredFamily' },
-		{ value: getNameString(font, 17), source: 'nameId17-preferredSubfamily' },
+		{ value: getNameString(font, 16) || ttfFallbackMeta?.preferredFamily, source: 'nameId16-preferredFamily' },
+		{ value: getNameString(font, 17) || ttfFallbackMeta?.preferredSubfamily, source: 'nameId17-preferredSubfamily' },
 		{ value: file.name.replace(/\.(ttf|otf|woff2?|eot|svg)$/i, ''), source: 'filename' },
 	].filter(alt => alt.value);
 
@@ -219,7 +244,7 @@ async function buildFontPlanEntry({
 	const matchedKeyword = usWeightClass ? null : weightName;
 
 	// Determine weight name source — nameId17 (preferredSubfamily) or nameId2 (fontSubfamily)
-	const nameId17 = getNameString(font, 17);
+	const nameId17 = getNameString(font, 17) || ttfFallbackMeta?.preferredSubfamily;
 	const weightNameSource = variableFont
 		? 'variable-font-empty'
 		: nameId17
@@ -228,7 +253,7 @@ async function buildFontPlanEntry({
 
 	// Determine style source
 	const italicAngle = getItalicAngle(font);
-	const fullName = getNameString(font, 4);
+	const fullName = getNameString(font, 4) || ttfFallbackMeta?.fullName || '';
 	let styleSource = 'default-regular';
 	let styleReason = '';
 	if (style === 'Italic') {
@@ -242,7 +267,7 @@ async function buildFontPlanEntry({
 	}
 
 	// Determine subfamily source — mirrors the logic in extractFontMetadata
-	const familyNameRaw = getNameString(font, 1);
+	const familyNameRaw = getNameString(font, 1) || ttfFallbackMeta?.familyName || '';
 	const nameId4Remainder = fullName ? fullName.replace(typefaceTitle.trim(), '').trim() : '';
 	const nameId1Remainder = familyNameRaw ? familyNameRaw.replace(typefaceTitle.trim(), '').trim() : '';
 	let subfamilySource = 'default-empty';
@@ -256,7 +281,7 @@ async function buildFontPlanEntry({
 	const decisions = createFontDecisions({
 		titleSource,
 		title: finalTitle,
-		titleOriginal: getNameString(font, 4),
+		titleOriginal: getNameString(font, 4) || ttfFallbackMeta?.fullName || '',
 		documentId,
 		weight,
 		weightSource,

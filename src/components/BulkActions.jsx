@@ -40,6 +40,12 @@ export default function BulkActions({
 		const updateCount = fontEntries.filter(f => f.status !== FONT_STATUS.ERROR && isUpdateEntry(f)).length;
 		const errorCount = fontEntries.filter(f => f.status === FONT_STATUS.ERROR).length;
 		const conflictCount = fontEntries.filter(f => f._idConflict).length;
+		const uploadable = fontEntries.filter(f => f.status !== FONT_STATUS.ERROR);
+		const missingTitleCount = uploadable.filter(f => !f.title?.trim()).length;
+		const missingIdCount = uploadable.filter(f => !f.documentId?.trim()).length;
+		const noOutlineCount = uploadable.filter(f =>
+			!(f.files || []).some(file => /\.(ttf|otf)$/i.test(file.name || ''))
+		).length;
 		const italicCount = fontEntries.filter(f => f.style === 'Italic' && f.status !== FONT_STATUS.ERROR).length;
 		const regularCount = fontEntries.filter(f => f.style === 'Regular' && f.status !== FONT_STATUS.ERROR).length;
 
@@ -51,7 +57,10 @@ export default function BulkActions({
 			subfamilyCounts[sf] = (subfamilyCounts[sf] || 0) + 1;
 		});
 
-		return { createCount, updateCount, errorCount, conflictCount, italicCount, regularCount, subfamilyCounts };
+		return {
+			createCount, updateCount, errorCount, conflictCount, italicCount, regularCount,
+			missingTitleCount, missingIdCount, noOutlineCount, subfamilyCounts,
+		};
 	}, [fontEntries]);
 
 	const subfamilies = useMemo(() =>
@@ -87,6 +96,9 @@ export default function BulkActions({
 					{filterCounts.italicCount > 0 && <option value="style:italic">Italic ({filterCounts.italicCount})</option>}
 					{filterCounts.errorCount > 0 && <option value="error">Errors ({filterCounts.errorCount})</option>}
 					{filterCounts.conflictCount > 0 && <option value="conflict">Conflicts ({filterCounts.conflictCount})</option>}
+					{filterCounts.missingTitleCount > 0 && <option value="missing-title">Missing title ({filterCounts.missingTitleCount})</option>}
+					{filterCounts.missingIdCount > 0 && <option value="missing-id">Missing ID ({filterCounts.missingIdCount})</option>}
+					{filterCounts.noOutlineCount > 0 && <option value="no-outline">No TTF/OTF ({filterCounts.noOutlineCount})</option>}
 					{subfamilies.length > 1 && subfamilies.map(sf => (
 						<option key={sf} value={`sf:${sf}`}>{sf} ({filterCounts.subfamilyCounts[sf]})</option>
 					))}

@@ -16,10 +16,11 @@ const EXTENDED_TYPES = ['eot', 'svg', 'css', 'woff2_subset', 'woff2_web'];
  * Collapsible review card for a single font in the upload plan.
  * Table-style header row with weight/style/files/action columns.
  */
-const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded, typefaceTitle, price, pricing, sell, selected = false, onToggleSelect }) {
+const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpanded, typefaceTitle, price, pricing, sell, selected = false, onToggleSelect, onRetry }) {
 	const [expanded, setExpanded] = useState(false);
 	const [showAllFileTypes, setShowAllFileTypes] = useState(false);
 	const [showDocPreview, setShowDocPreview] = useState(false);
+	const [isRetrying, setIsRetrying] = useState(false);
 
 	// Sync with allExpanded toggle from BulkActions
 	useEffect(() => {
@@ -74,6 +75,24 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 	const fileCount = entry.files?.length || 0;
 	const cardTone = isError ? 'critical' : hasConflict ? 'caution' : 'default';
 
+	// Metadata is only generated from a TTF or OTF. Without one the document is written with no
+	// metrics, character set, glyph count or variable instances, and nothing else says so.
+	const hasOutline = Boolean(fileExtMap.ttf || fileExtMap.otf);
+
+	// Weight outside the variable axis range — checked whether the value was detected or typed,
+	// since a wrong usWeightClass in the binary is just as broken as a mistyped override.
+	const wghtAxis = entry.variationAxes?.wght;
+	const weightOutsideAxis = Boolean(
+		wghtAxis && (entry.weight < wghtAxis.min || entry.weight > wghtAxis.max)
+	);
+
+	const handleUseAxisDefault = useCallback(() => {
+		if (!wghtAxis) return;
+		const fallback = wghtAxis.default ?? wghtAxis.min;
+		dispatch({ type: 'SET_FONT_WEIGHT', tempId: entry.tempId, weight: fallback });
+		setLocalWeight(String(fallback));
+	}, [wghtAxis, entry.tempId, dispatch]);
+
 	const handleTitleBlur = useCallback(() => {
 		if (localTitle !== entry.title) {
 			dispatch({ type: 'SET_FONT_TITLE', tempId: entry.tempId, title: localTitle });
@@ -121,6 +140,17 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 	const handleRemove = useCallback(() => {
 		dispatch({ type: 'REMOVE_FONT', tempId: entry.tempId });
 	}, [entry.tempId, dispatch]);
+
+	/** Re-parse this entry's files. The entry is replaced, so no local state survives the call. */
+	const handleRetry = useCallback(async () => {
+		if (!onRetry) return;
+		setIsRetrying(true);
+		try {
+			await onRetry([entry.tempId]);
+		} finally {
+			setIsRetrying(false);
+		}
+	}, [onRetry, entry.tempId]);
 
 	/** Tick for merging without toggling the card open */
 	const handleSelectClick = useCallback((e) => {
@@ -204,9 +234,24 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 			{/* Error message */}
 			{isError && (
 				<Box paddingX={2} paddingBottom={2}>
-					<Flex justify="space-between" align="center">
-						<Text size={0} muted>{entry.error}</Text>
-						<Button mode="bleed" tone="critical" icon={TrashIcon} padding={1} onClick={handleRemove} />
+					<Flex justify="space-between" align="center" gap={2}>
+						<Text size={0} muted style={{ minWidth: 0 }}>{entry.error}</Text>
+						<Flex gap={1} style={{ flexShrink: 0 }}>
+							{onRetry && (
+								<Button
+									mode="ghost"
+									tone="primary"
+									icon={ResetIcon}
+									text={isRetrying ? 'Retrying' : 'Retry'}
+									fontSize={0}
+									padding={2}
+									disabled={isRetrying}
+									onClick={handleRetry}
+									style={{ cursor: isRetrying ? 'default' : 'pointer' }}
+								/>
+							)}
+							<Button mode="bleed" tone="critical" icon={TrashIcon} padding={1} onClick={handleRemove} />
+						</Flex>
 					</Flex>
 				</Box>
 			)}
@@ -252,6 +297,21 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 									</Badge>
 								))}
 							</Flex>
+							{!hasOutline && (
+								<Text size={0} tone="caution" style={{ lineHeight: 1.6 }}>
+									No TTF or OTF. Metrics, character set, glyph count and variable instances are read
+									from the outline file, so this document will be written without them.
+								</Text>
+							)}
+							{(entry.duplicateFiles || []).length > 0 && (
+								<Stack space={1}>
+									{entry.duplicateFiles.map(d => (
+										<Text key={d.fileName} size={0} tone="caution" style={{ wordBreak: 'break-all' }}>
+											Not uploaded: {d.fileName} — a {d.type.toUpperCase()} is already assigned to this font.
+										</Text>
+									))}
+								</Stack>
+							)}
 						</Stack>
 
 						{/* Title */}
@@ -399,12 +459,21 @@ const FontReviewCard = memo(function FontReviewCard({ entry, dispatch, allExpand
 										</Badge>
 									))}
 								</Flex>
-								{entry.decisions?.weight?.userOverride != null && entry.variationAxes?.wght && (
-									(entry.weight < entry.variationAxes.wght.min || entry.weight > entry.variationAxes.wght.max) && (
+								{weightOutsideAxis && (
+									<Flex align="center" gap={2} wrap="wrap">
 										<Text size={0} tone="caution">
-											Weight {entry.weight} is outside the wght axis range ({entry.variationAxes.wght.min}–{entry.variationAxes.wght.max})
+											Weight {entry.weight} is outside the wght axis range ({wghtAxis.min}–{wghtAxis.max})
 										</Text>
-									)
+										<Button
+											mode="ghost"
+											tone="caution"
+											fontSize={0}
+											padding={1}
+											text={`Use ${wghtAxis.default ?? wghtAxis.min}`}
+											onClick={handleUseAxisDefault}
+											style={{ cursor: 'pointer' }}
+										/>
+									</Flex>
 								)}
 							</Stack>
 						)}

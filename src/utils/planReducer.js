@@ -62,12 +62,21 @@ export function planReducer(state, action) {
 			const newSettings = { ...state.settings, ...action.settings };
 			let newState = { ...state, settings: newSettings };
 
-			// Retitle fonts when preserveShortenedNames changes during review
+			// Retitle fonts when either naming setting changes during review. Both change what the
+			// title and document ID are derived from, so leaving the entries alone made the file
+			// names switch look like it did nothing.
 			const shortenedChanged = 'preserveShortenedNames' in action.settings
 				&& action.settings.preserveShortenedNames !== state.settings.preserveShortenedNames;
-			if (shortenedChanged && Object.keys(state.fonts).length > 0) {
+			const fileNamesChanged = 'preserveFileNames' in action.settings
+				&& action.settings.preserveFileNames !== state.settings.preserveFileNames;
+			if ((shortenedChanged || fileNamesChanged) && Object.keys(state.fonts).length > 0) {
 				const typefaceTitle = action.typefaceTitle || state.settings.typefaceTitle || '';
-				const retitled = retitleAllFonts(state.fonts, newSettings.preserveShortenedNames, typefaceTitle);
+				const retitled = retitleAllFonts(
+					state.fonts,
+					newSettings.preserveShortenedNames,
+					typefaceTitle,
+					newSettings.preserveFileNames,
+				);
 				const subfamilyGroups = rebuildSubfamilyGroups(retitled);
 				newState = { ...newState, fonts: retitled, subfamilyGroups };
 			}
@@ -120,7 +129,9 @@ export function planReducer(state, action) {
 
 			return {
 				...state,
-				fonts,
+				// An entry added after review has begun (a retried file) can collide with one already
+				// on screen, so conflicts are recomputed rather than assumed absent.
+				fonts: markConflicts(fonts),
 				subfamilyGroups,
 				processingProgress: {
 					...state.processingProgress,

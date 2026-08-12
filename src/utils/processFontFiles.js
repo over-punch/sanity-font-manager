@@ -124,7 +124,7 @@ export const processFontFiles = async (
  * @param {File[]} files
  * @returns {Promise<{ fullName: string, familyName: string, subfamilyName: string, preferredSubfamily: string }|null>}
  */
-const getWebfontFallbackMetadata = async (file, font, files) => {
+export const getWebfontFallbackMetadata = async (file, font, files) => {
 	if (!file.name.endsWith('.woff2') && !file.name.endsWith('.woff')) return null;
 
 	const fullName = getNameString(font, 4);

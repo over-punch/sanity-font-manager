@@ -145,6 +145,40 @@ export default function UploadModal({
 		}
 	}, [typefaceTitle, docId, client, stylesObject, weightKeywordList, italicKeywordList]);
 
+	/**
+	 * Re-parse the files behind entries that failed, without discarding the rest of the batch.
+	 * A parse failure is often transient or specific to one file, and restarting meant re-selecting
+	 * every file and redoing every review edit.
+	 * @param {string[]} tempIds - Entries to retry
+	 */
+	const handleRetryProcessing = useCallback(async (tempIds) => {
+		const entries = tempIds.map(id => plan.fonts[id]).filter(Boolean);
+		const files = entries.flatMap(e => e.files || []);
+		if (files.length === 0) return;
+
+		for (const tempId of tempIds) {
+			dispatch({ type: 'REMOVE_FONT', tempId });
+		}
+
+		try {
+			const retried = await buildUploadPlan({
+				files,
+				typefaceTitle,
+				docId,
+				settings: plan.settings,
+				client,
+				stylesObject,
+				weightKeywordList,
+				italicKeywordList,
+			});
+			for (const [tempId, entry] of Object.entries(retried.fonts)) {
+				dispatch({ type: 'ADD_PROCESSED_FONT', tempId, fontEntry: entry });
+			}
+		} catch (err) {
+			console.error('Retry failed:', err.message);
+		}
+	}, [plan.fonts, plan.settings, typefaceTitle, docId, client, stylesObject, weightKeywordList, italicKeywordList]);
+
 	/** Cancel processing and return to Step 1 */
 	const handleCancelProcessing = useCallback(() => {
 		cancelRef.current = true;
@@ -259,6 +293,7 @@ export default function UploadModal({
 						onCancelProcessing={handleCancelProcessing}
 						onStartExecution={handleStartExecution}
 						processingCancelled={processingCancelled}
+						onRetryFont={handleRetryProcessing}
 					/>
 				)}
 
