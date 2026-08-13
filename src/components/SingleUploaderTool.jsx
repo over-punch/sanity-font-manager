@@ -17,6 +17,7 @@ import generateCssFile from '../utils/generateCssFile';
 import generateFontData from '../utils/generateFontData';
 import generateFontFile from '../utils/generateFontFile';
 import generateSubset from '../utils/generateSubset';
+import { generateWebAndSubset } from '../utils/generateWebAndSubset';
 import { parseVariableFontInstances } from '../utils/parseVariableFontInstances';
 import StatusDisplay from './StatusDisplay';
 
@@ -133,6 +134,28 @@ export const SingleUploaderTool = (props) => {
 	}, [fileInput, onChange, doc_title, doc_variableFont, doc_weight, client]);
 
 	/** Converts and uploads the source font file to one or more target formats. */
+	/**
+	 * Waits for the WOFF2 asset to appear on the document after a build.
+	 *
+	 * generateFontFile posts `no-cors`, so it resolves before the worker has written anything —
+	 * asking for the web copy immediately would send an empty woff2Url. Polls until the asset
+	 * exists, then returns its CDN URL.
+	 *
+	 * @returns {Promise<string|null>} the WOFF2 URL, or null if it never appeared
+	 */
+	const waitForWoff2 = useCallback(async (timeoutMs = 120000, intervalMs = 3000) => {
+		const deadline = Date.now() + timeoutMs;
+		while (Date.now() < deadline) {
+			const url = await client.fetch(
+				`*[_id == $id][0].fileInput.woff2.asset->url`,
+				{ id: doc_id }
+			);
+			if (url) return url;
+			await new Promise((r) => setTimeout(r, intervalMs));
+		}
+		return null;
+	}, [client, doc_id]);
+
 	const handleGenerateFontFile = useCallback(async (code, sourceFile) => {
 		const isMissing = Array.isArray(code);
 		const label = code === 'all' ? 'all font files' : isMissing ? 'missing files' : code + ' file';
@@ -159,6 +182,40 @@ export const SingleUploaderTool = (props) => {
 
 			setMessage('Files built');
 			setStatus('Files built successfully');
+
+			// Chain the DS-WEB copy and display subset whenever a WOFF2 was produced. fontWorker
+			// attempts both inline during generate-fonts, but two uploads have now landed without
+			// them (Daith's 82 and Omnes' 2), and the manual WEB/SUBSET buttons sit behind the
+			// Advanced toggle where they are easy to miss. Requesting them explicitly — and verifying
+			// they land — makes the single-font path match what the batch uploader already does.
+			if (codes.includes('woff2')) {
+				const woff2Url = await waitForWoff2();
+				if (woff2Url) {
+					setStatus('Building WEB + SUBSET');
+					setMessage('Building WEB + SUBSET files...');
+					const summary = await generateWebAndSubset({
+						client,
+						siteUrl: process.env.SANITY_STUDIO_SITE_URL,
+						fonts: [{
+							_id: doc_id,
+							woff2Url,
+							filename: doc_slug?.current,
+							title: doc_title,
+							variableFont: doc_variableFont,
+							style: doc_style,
+							weight: doc_weight,
+						}],
+					});
+					if (summary?.pending?.length) {
+						setMessage('WEB + SUBSET did not finish — use the Advanced panel to retry');
+						setError(true);
+						setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 5000);
+						return;
+					}
+					setMessage('WEB + SUBSET built');
+				}
+			}
+
 			setTimeout(() => { setMessage(''); setStatus('ready'); }, 2000);
 		} catch (err) {
 			console.error('Error building font files:', err);
@@ -659,8 +716,10 @@ export const SingleUploaderTool = (props) => {
 			{renderFontSection('otf', 'woff')}
 			{renderFontSection('woff', 'ttf')}
 			{renderFontSection('woff2', 'ttf')}
-			{showAdvanced && renderTopLevelAssetSection('WEB', 'woff2_web', fileInput?.woff2_web?.asset?._ref, filenames?.woff2_web, handleGenerateSubsetAndWeb)}
-			{showAdvanced && renderTopLevelAssetSection('SUBSET', 'woff2_subset', fileInput?.woff2_subset?.asset?._ref, filenames?.woff2_subset, handleGenerateSubsetAndWeb)}
+			{/* Shown whenever a WOFF2 exists, not just under Advanced: these are web-delivery
+			    prerequisites, and hiding them is how two typefaces shipped without them. */}
+			{(showAdvanced || fileInput?.woff2?.asset?._ref) && renderTopLevelAssetSection('WEB', 'woff2_web', fileInput?.woff2_web?.asset?._ref, filenames?.woff2_web, handleGenerateSubsetAndWeb)}
+			{(showAdvanced || fileInput?.woff2?.asset?._ref) && renderTopLevelAssetSection('SUBSET', 'woff2_subset', fileInput?.woff2_subset?.asset?._ref, filenames?.woff2_subset, handleGenerateSubsetAndWeb)}
 			{showAdvanced && renderFontSection('eot', 'ttf')}
 			{showAdvanced && renderFontSection('svg', 'ttf')}
 			{renderCssSection()}
