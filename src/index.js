@@ -116,6 +116,7 @@ export { collectSupportedTags, dedupeFontDocs, detectOpenTypeFeatures } from './
 export { styleCountField } from './schema/styleCountField.js';
 export { stylisticSetField } from './schema/stylisticSetField.js';
 export { createStylesField } from './schema/stylesField.js';
+export { createFontFileFields, FONT_FILE_FORMATS } from './schema/fontFileFields.js';
 export { cedarsProfileField, createCedarsProfileField } from './schema/cedarsProfileField.js';
 
 // CEDARS+ profile computation (auto-tags typefaces on upload)
