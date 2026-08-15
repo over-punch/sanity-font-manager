@@ -1,8 +1,16 @@
 # Active Context — @liiift-studio/sanity-font-manager
 
-Last updated: 2026-08-12
+Last updated: 2026-08-15
 
 ## Recent state
+
+- **v2.17.0 published** (2026-08-13). Adds `createFontFileFields()` — a factory for the font
+  document's `fileInput` object, following the `createStylesField` / `createOpenTypeField`
+  convention. The nine per-format fields were hand-copied into all three consumer schemas; they now
+  spread the factory instead. `derived: false` omits woff2_subset/woff2_web for a site with no
+  subset-capable fontWorker. 11 tests, 395 total. All three studios are on `^2.17.0`.
+  That release also carries a concurrent session's SingleUploaderTool web/subset commit, which had
+  bumped the local version to 2.17.0 without publishing.
 
 - **v2.16.0 published** (2026-08-12). Upload-wizard merge + data-safety release, driven by an Omnes
   variable-font upload where one style split into several review entries.
@@ -25,13 +33,14 @@ Last updated: 2026-08-12
     checked for detected values too, with an axis-default fix button), missing title/ID.
   - Failed-to-parse entries can be retried without restarting the batch.
 
-- Rolled out to Darden `sanity` (`^2.16.0`, main). **Not** TDF or MCKL.
-- 384 tests passing.
+- Rolled out to **all three** studios at `^2.17.0` (Darden main, TDF staging, MCKL staging).
+- 395 tests passing.
 
 ## Pending work
 
-- **Studio redeploy.** Darden's Studio needs `npm run deploy` in `sites/darden/sanity` before any of
-  the 2.16.0 UI reaches the hosted Studio.
+- **Studio redeploys.** TDF's Studio was deployed 2026-08-13 (before the createFontFileFields swap —
+  functionally identical fields, so cosmetic). **Darden's and MCKL's Studios have NOT been deployed**
+  since 2.17.0; MCKL's `webAndSubset: true` is not live until its Studio ships.
 - **Port MCKL "preserve file names" fixes into this package.** A 9-commit fix branch on `mckl/cms`
   (`fix/font-uploader-preserve-filenames`, HEAD `6c35828`) also stops the typeface patch from wiping
   `styles.collections` / `styles.pairs` and makes `preferredStyle` sticky. Plan at
