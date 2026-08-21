@@ -1,8 +1,8 @@
 // Post-upload summary — results display with retry for failed fonts and typeface patch
 
 import React, { useState, useCallback } from 'react';
-import { Stack, Flex, Text, Card, Badge, Button, Box, Spinner } from '@sanity/ui';
-import { CheckmarkCircleIcon, WarningOutlineIcon, ResetIcon } from '@sanity/icons';
+import { Stack, Flex, Text, Card, Badge, Button, Box, Spinner } from '@liiift-studio/sanity-ui-compat';
+import { CheckmarkCircleIcon, WarningOutlineIcon, ResetIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { useConfettiText } from '@liiift-studio/confettitext/react';
 import { updateTypefaceDocument } from '../utils/updateTypefaceDocument';
 

@@ -1,7 +1,7 @@
 // Label-wrapped button that triggers a hidden file input
 
 import React, { forwardRef } from 'react';
-import { Button, Text } from '@sanity/ui';
+import { Button, Text } from '@liiift-studio/sanity-ui-compat';
 
 /**
  * Primary button with a transparent full-size file input overlay.

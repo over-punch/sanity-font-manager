@@ -1,8 +1,8 @@
 // Step 3.5 — Variable font instance mapping using the production parseVariableFontInstances matcher
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Stack, Flex, Text, Card, Badge, Button, Spinner, Autocomplete } from '@sanity/ui';
-import { CheckmarkCircleIcon, CloseCircleIcon, SearchIcon } from '@sanity/icons';
+import { Box, Stack, Flex, Text, Card, Badge, Button, Spinner, Autocomplete } from '@liiift-studio/sanity-ui-compat';
+import { CheckmarkCircleIcon, CloseCircleIcon, SearchIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { nanoid } from 'nanoid';
 import { parseVariableFontInstances } from '../utils/parseVariableFontInstances';
 import { HighlightedName } from './HighlightedName';

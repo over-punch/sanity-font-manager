@@ -1,8 +1,8 @@
 // Existing document resolution UI — toggle between update existing and create new
 
 import React from 'react';
-import { Card, Stack, Flex, Text, Badge, Button, Label, Switch, Tooltip, Box } from '@sanity/ui';
-import { InfoOutlineIcon } from '@sanity/icons';
+import { Card, Stack, Flex, Text, Badge, Button, Label, Switch, Tooltip, Box } from '@liiift-studio/sanity-ui-compat';
+import { InfoOutlineIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { RECOMMENDATION } from '../utils/planTypes';
 
 /**

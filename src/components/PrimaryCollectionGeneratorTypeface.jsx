@@ -1,7 +1,7 @@
 // Generates a single primary full-family collection from a typeface's linked fonts and prepends it to the existing collections array
 
 import React, { useCallback, useState } from 'react';
-import { Stack, Flex, Text, Button, Card, Spinner } from '@sanity/ui';
+import { Stack, Flex, Text, Button, Card, Spinner } from '@liiift-studio/sanity-ui-compat';
 import { useFormValue } from 'sanity';
 import { nanoid } from 'nanoid';
 

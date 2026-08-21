@@ -1,7 +1,7 @@
 // Generates Full Family, Uprights, Italics, and Subfamily collections plus Regular/Italic weight pairs from a typeface's linked fonts
 
 import React, { useCallback, useState } from 'react';
-import { Stack, Grid, Flex, Text, Button, Card, Spinner } from '@sanity/ui';
+import { Stack, Grid, Flex, Text, Button, Card, Spinner } from '@liiift-studio/sanity-ui-compat';
 import { useFormValue } from 'sanity';
 import slugify from 'slugify';
 import { nanoid } from 'nanoid';

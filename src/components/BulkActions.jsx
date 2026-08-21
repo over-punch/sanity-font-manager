@@ -1,8 +1,8 @@
 // Bulk actions bar — expand/collapse all, search, filter with counts
 
 import React, { useMemo } from 'react';
-import { Flex, Box, Button, TextInput, Select, Text, Label } from '@sanity/ui';
-import { SearchIcon } from '@sanity/icons';
+import { Flex, Box, Button, TextInput, Select, Text, Label } from '@liiift-studio/sanity-ui-compat';
+import { SearchIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { FONT_STATUS, RECOMMENDATION } from '../utils/planTypes';
 
 /** Determines whether a font entry will create or update a document */

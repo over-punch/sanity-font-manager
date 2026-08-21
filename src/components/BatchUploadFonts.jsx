@@ -1,8 +1,8 @@
 // Batch font uploader — drag-and-drop file list, confirm-to-upload, elapsed timer, Wake Lock, and beforeunload guard for long uploads
 
 import React, { useCallback, useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
-import { Card, Box, Flex, Grid, Text, Label, Switch, Button, Spinner, Tooltip, Stack } from '@sanity/ui';
-import { ControlsIcon, InfoOutlineIcon, TrashIcon, UploadIcon, WarningOutlineIcon } from '@sanity/icons';
+import { Card, Box, Flex, Grid, Text, Label, Switch, Button, Spinner, Tooltip, Stack } from '@liiift-studio/sanity-ui-compat';
+import { ControlsIcon, InfoOutlineIcon, TrashIcon, UploadIcon, WarningOutlineIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { useFormValue } from 'sanity';
 
 const UploadModal = lazy(() => import('./UploadModal'));

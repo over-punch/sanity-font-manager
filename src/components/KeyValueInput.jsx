@@ -1,8 +1,8 @@
 // Ordered key-value string pair editor for Sanity Studio — add, remove, and reorder rows
 
 import React, { useState, useCallback } from 'react';
-import { Button, Grid, Stack, TextInput } from '@sanity/ui';
-import { AddIcon, ArrowDownIcon, ArrowUpIcon, TrashIcon } from '@sanity/icons';
+import { Button, Grid, Stack, TextInput } from '@liiift-studio/sanity-ui-compat';
+import { AddIcon, ArrowDownIcon, ArrowUpIcon, TrashIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { set } from 'sanity';
 
 /**

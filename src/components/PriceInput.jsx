@@ -1,7 +1,7 @@
 // Reusable $ + number input for collection and pair price fields
 
 import React from 'react';
-import { Flex, Text } from '@sanity/ui';
+import { Flex, Text } from '@liiift-studio/sanity-ui-compat';
 
 /**
  * Renders an inline price field: "Price  $  [input]  per style"

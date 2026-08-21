@@ -1,8 +1,8 @@
 // Step 1 — File upload: drag-and-drop zone, file list table, type breakdown with mismatch detection
 
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { Box, Flex, Stack, Text, Button, Card, Badge } from '@sanity/ui';
-import { UploadIcon, TrashIcon } from '@sanity/icons';
+import { Box, Flex, Stack, Text, Button, Card, Badge } from '@liiift-studio/sanity-ui-compat';
+import { UploadIcon, TrashIcon } from '@liiift-studio/sanity-ui-compat/icons';
 
 /** Accepted font file extensions */
 const ACCEPTED_EXTENSIONS = ['ttf', 'otf', 'woff', 'woff2', 'eot', 'svg'];

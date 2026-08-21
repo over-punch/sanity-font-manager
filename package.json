@@ -52,6 +52,7 @@
   "dependencies": {
     "@liiift-studio/cedars-engine": "^3.0.0",
     "@liiift-studio/confettitext": "^3.0.0",
+    "@liiift-studio/sanity-ui-compat": "^0.1.2",
     "base-64": "^1.0.0",
     "lib-font": "^3.0.1",
     "nanoid": "^5.0.0",
@@ -60,10 +61,10 @@
   },
   "peerDependencies": {
     "@liiift-studio/sanity-advanced-reference-array": ">=1",
-    "@sanity/icons": ">=3",
-    "@sanity/ui": ">=3",
+    "@sanity/icons": ">=2 <6",
+    "@sanity/ui": ">=2 <5",
     "react": ">=18",
-    "sanity": ">=3"
+    "sanity": ">=3 <7"
   },
   "peerDependenciesMeta": {
     "@liiift-studio/sanity-advanced-reference-array": {
@@ -71,8 +72,8 @@
     }
   },
   "devDependencies": {
-    "@sanity/icons": "^3",
-    "@sanity/ui": "^3",
+    "@sanity/icons": "^5",
+    "@sanity/ui": "^4",
     "@types/react": "^19",
     "react": "^19",
     "sanity": "^5",

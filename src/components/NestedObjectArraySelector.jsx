@@ -1,7 +1,7 @@
 // Generic checkbox-list selector for nested objects from Sanity documents — configured via schema options
 
 import React, { useMemo, useState } from 'react';
-import { Stack, Card, Text, Checkbox, Box, Spinner, Flex } from '@sanity/ui';
+import { Stack, Card, Text, Checkbox, Box, Spinner, Flex } from '@liiift-studio/sanity-ui-compat';
 import { useNestedObjects } from '../hooks/useNestedObjects';
 import { set, unset } from 'sanity';
 

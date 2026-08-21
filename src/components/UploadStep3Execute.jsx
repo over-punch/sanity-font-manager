@@ -1,8 +1,8 @@
 // Step 3 — Upload execution with per-font progress
 
 import React, { useEffect, useReducer, useRef, useState, useMemo } from 'react';
-import { Box, Stack, Flex, Text, Card, Spinner, Badge } from '@sanity/ui';
-import { WarningOutlineIcon, CheckmarkCircleIcon } from '@sanity/icons';
+import { Box, Stack, Flex, Text, Card, Spinner, Badge } from '@liiift-studio/sanity-ui-compat';
+import { WarningOutlineIcon, CheckmarkCircleIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { executeUploadPlan } from '../utils/executeUploadPlan';
 import { executionReducer, createInitialExecutionState } from '../utils/executionReducer';
 import { EXECUTION_STATUS } from '../utils/planTypes';

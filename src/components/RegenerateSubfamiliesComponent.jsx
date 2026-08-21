@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { nanoid } from 'nanoid';
-import { Button, Text, Stack, Box } from '@sanity/ui';
+import { Button, Text, Stack, Box } from '@liiift-studio/sanity-ui-compat';
 import { useFormValue } from 'sanity';
 import { useSanityClient } from '../hooks/useSanityClient';
 import { expandAbbreviations } from '../utils/generateKeywords';

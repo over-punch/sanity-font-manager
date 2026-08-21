@@ -1,7 +1,7 @@
 // Updates and re-links existing script font variant references on font documents
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Stack, Text, Button } from '@sanity/ui';
+import { Stack, Text, Button } from '@liiift-studio/sanity-ui-compat';
 import { useFormValue, set } from 'sanity';
 
 import { useSanityClient } from '../hooks/useSanityClient';
