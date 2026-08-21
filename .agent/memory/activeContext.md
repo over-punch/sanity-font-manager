@@ -4,6 +4,13 @@ Last updated: 2026-08-15
 
 ## Recent state
 
+- **v2.19.0 — the variable font is the source of truth for labels.** `collectSupportedTags` now
+  feeds documents through `orderByAuthority`, a stable sort putting `variableFont === true` first, so
+  a VF's names beat the statics' while statics still fill tags the VF leaves unnamed. `SetOTF`'s GROQ
+  projects `variableFont` to make that possible. 6 new tests, 424 total.
+  - Chosen over "VF is the only source when one exists": a family whose VF has not been rebuilt yet
+    would otherwise show canonical titles even where its statics carry names.
+
 - **v2.18.0 — OpenType feature titles from the font.** Version bumped, **not yet published**, and
   no Studio is on `^2.18.0` yet. `Detect OTF` now titles a stylistic set
   or character variant with the name the foundry put in the font (`ss01` → "Alternate g") instead
@@ -61,6 +68,19 @@ Last updated: 2026-08-15
 - 395 tests passing.
 
 ## Pending work
+
+- **MCKL's deployed fontWorker strips `featureList`.** `site/pages/api/sanity/fontWorker.js` on `main`
+  writes `opentypeFeatures: { chars: font.availableFeatures }`, replacing the whole object — so the
+  site's "Rebuild All from TTF" path wipes any labels the Studio wrote. A fontkit mirror of
+  `getFeatureUiNames` exists at `site/lib/openTypeFeatureNames.js` and the fix is in the site repo's
+  working tree on `feature/opentype-feature-titles`, but is **uncommitted and undeployed**. Until it
+  ships, Studio-side Build and the site-side rebuild fight over this field.
+
+- **`executeUploadPlan` can refresh `opentypeFeatures` with empties.** The re-upload path does
+  `if (entry.opentypeFeatures) refreshFields.opentypeFeatures = entry.opentypeFeatures`, which is
+  truthy for the parse-failure entry `{ chars: [], featureList: [] }` — overwriting a document's good
+  data. Pre-existing (the old shape `{ chars: [] }` was truthy too), now costing labels as well.
+  `uploadFontFiles` guards this; `executeUploadPlan` does not.
 
 - **`pako` is imported but never declared.** `utils/setupDecompressors.js` imports `pako`, which is
   absent from `dependencies`, so 8 test files fail to load on a clean `npm ci` (`libfont-integration`,

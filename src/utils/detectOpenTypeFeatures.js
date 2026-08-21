@@ -30,7 +30,8 @@ export function dedupeFontDocs(fontDocs = []) {
  * Merges one font document's stored feature labels into the family-wide tag → label map.
  *
  * Styles can disagree: a family may name `ss01` "Alternate g" on the roman and leave it unnamed on
- * the italic. The first style to name a tag wins, which is the order the editor sees in `styles`.
+ * the italic. The first style to name a tag wins, and the caller feeds variable fonts in first, so
+ * the VF's labels beat the statics' — see `orderByAuthority`.
  *
  * @param {object} doc - font document projected with `opentypeFeatures`
  * @param {Map<string, string>} names - accumulator, mutated in place
@@ -48,13 +49,33 @@ function collectFeatureNames(doc, names) {
 }
 
 /**
+ * Orders styles so the family's variable font is consulted first.
+ *
+ * A VF is the whole family in one binary, so its labels are the family's labels — where a static
+ * style is one cut whose names may lag a re-release, or be missing because nobody rebuilt it. The
+ * statics still follow, filling in any tag the VF does not name, so a partially rebuilt family
+ * keeps working.
+ *
+ * The sort is stable, so styles that are not variable keep their `styles.fonts` order relative to
+ * each other, and a family with no VF behaves exactly as before.
+ *
+ * @param {object[]} docs - deduped font documents, projected with `variableFont`
+ * @returns {object[]} the same documents, variable fonts first
+ */
+function orderByAuthority(docs) {
+	return [...docs].sort((a, b) => (b?.variableFont === true) - (a?.variableFont === true));
+}
+
+/**
  * Collects the union of OpenType layout tags across every supplied font document, along with any
  * foundry-authored labels those styles carry for their stylistic sets and character variants.
  *
  * A family's styles rarely agree — italics routinely drop stylistic sets the romans carry — so the
  * union answers "what can this typeface do", which is what a family-level field describes.
  *
- * @param {object[]} fontDocs - font documents projected with `_id` and `opentypeFeatures`
+ * Labels are read variable-font-first — see `orderByAuthority`.
+ *
+ * @param {object[]} fontDocs - font documents projected with `_id`, `variableFont`, `opentypeFeatures`
  * @returns {{tags: Set<string>, names: Map<string, string>, fontsWithData: number}} union of tags,
  *   tag → font-supplied label, and how many styles carried any feature data
  */
@@ -63,7 +84,7 @@ export function collectSupportedTags(fontDocs = []) {
 	const names = new Map();
 	let fontsWithData = 0;
 
-	for (const doc of dedupeFontDocs(fontDocs)) {
+	for (const doc of orderByAuthority(dedupeFontDocs(fontDocs))) {
 		// Labels are gathered before the `chars` gate: a style whose feature list survived a partial
 		// upload can still name a set another style contributes the tag for.
 		collectFeatureNames(doc, names);

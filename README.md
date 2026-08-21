@@ -345,6 +345,8 @@ Recalculates and patches the `subfamily` field on all fonts linked to a typeface
 
 Detects which configured OpenType feature keys are supported by the typeface's first linked font. Reads `opentypeFeatures.chars` from the font document (populated by `generateFontData`) and patches the `features` array on the field. Shows a feature count when features are detected, and clear error messages when font data is missing.
 
+Where the family ships a variable font, its labels win over the statics' — a VF is the whole family in one binary, while a static is one cut whose names may lag or be missing. Statics still fill in any tag the VF does not name.
+
 Stylistic sets and character variants are titled with the foundry's own name where the font supplies one — `ss01` becomes "Alternate g" rather than "Stylistic Set 1" — read from `opentypeFeatures.featureList`. Features the font does not name keep their `OPENTYPE_FEATURE_TAGS` title, and a title an editor has typed is never overwritten. Because the label is stored per style at upload time, fonts uploaded before 2.18.0 need their data regenerated before their names appear.
 
 Wire it up on the `openType` object field in the typeface schema:

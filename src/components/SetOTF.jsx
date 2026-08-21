@@ -13,7 +13,7 @@ import { detectOpenTypeFeatures } from '../utils/detectOpenTypeFeatures';
  *
  * Stylistic sets and character variants are titled with the foundry's own name where the font
  * supplied one, falling back to the canonical "Stylistic Set 1" wording. Titles an editor typed
- * are left alone.
+ * are left alone. Where the family ships a variable font, its labels win over the statics'.
  */
 export const SetOTF = (props) => {
 	const { onChange, value = {} } = props;
@@ -47,7 +47,7 @@ export const SetOTF = (props) => {
 		setRunning(true);
 		try {
 			const fontDocs = await client.fetch(
-				`*[_type == "font" && (_id in $ids || _id in $draftIds)]{ _id, opentypeFeatures }`,
+				`*[_type == "font" && (_id in $ids || _id in $draftIds)]{ _id, variableFont, opentypeFeatures }`,
 				{ ids, draftIds }
 			);
 

@@ -211,3 +211,64 @@ describe('font-supplied feature titles', () => {
 		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('New name');
 	});
 });
+
+describe('variable font as the source of truth', () => {
+	/** Builds a font document, optionally flagged as the family's variable font */
+	const style = (id, chars, featureList, variableFont = false) =>
+		({ _id: id, variableFont, opentypeFeatures: { chars, featureList } });
+
+	it('prefers the variable font\'s label over a static\'s', () => {
+		// The static is first in styles.fonts, so without the VF rule it would win on document order.
+		const docs = [
+			style('roman', ['ss01'], [{ tag: 'ss01', title: 'Stale name' }]),
+			style('vf', ['ss01'], [{ tag: 'ss01', title: 'Schoolbook a y (ss01)' }], true),
+		];
+		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('Schoolbook a y (ss01)');
+	});
+
+	it('lets statics fill in tags the variable font does not name', () => {
+		// A partially rebuilt family still benefits from whatever labels exist.
+		const docs = [
+			style('vf', ['ss01', 'ss02'], [{ tag: 'ss01', title: 'Alt Q (ss01)' }], true),
+			style('roman', ['ss01', 'ss02'], [{ tag: 'ss02', title: 'Tailed a (ss02)' }]),
+		];
+		const { detected } = detectOpenTypeFeatures(docs, {});
+		expect(detected.stylisticSet1.title).toBe('Alt Q (ss01)');
+		expect(detected.stylisticSet2.title).toBe('Tailed a (ss02)');
+	});
+
+	it('keeps styles.fonts order among statics when there is no variable font', () => {
+		const docs = [
+			style('roman', ['ss01'], [{ tag: 'ss01', title: 'First' }]),
+			style('italic', ['ss01'], [{ tag: 'ss01', title: 'Second' }]),
+		];
+		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('First');
+	});
+
+	it('still unions tags across every style regardless of ordering', () => {
+		const docs = [
+			style('roman', ['ss01'], []),
+			style('vf', ['ss02'], [], true),
+		];
+		const { supportedTags, fontsWithData } = detectOpenTypeFeatures(docs, {});
+		expect(supportedTags).toEqual(['ss01', 'ss02']);
+		expect(fontsWithData).toBe(2);
+	});
+
+	it('takes the first variable font when a family somehow has two', () => {
+		const docs = [
+			style('vf-roman', ['ss01'], [{ tag: 'ss01', title: 'Roman VF' }], true),
+			style('vf-italic', ['ss01'], [{ tag: 'ss01', title: 'Italic VF' }], true),
+		];
+		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('Roman VF');
+	});
+
+	it('treats a missing variableFont flag as static', () => {
+		// Documents projected before variableFont was added to the query must not break the sort.
+		const docs = [
+			{ _id: 'legacy', opentypeFeatures: { chars: ['ss01'], featureList: [{ tag: 'ss01', title: 'Legacy' }] } },
+			style('vf', ['ss01'], [{ tag: 'ss01', title: 'From VF' }], true),
+		];
+		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('From VF');
+	});
+});
