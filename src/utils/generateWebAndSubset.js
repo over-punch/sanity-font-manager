@@ -1,4 +1,5 @@
 // Requests DS-WEB fingerprinted web copies and display subsets for uploaded fonts, then verifies they landed.
+import { withTimeout } from './planTypes';
 
 /**
  * Default number of fonts requested at once. The work is server-side WOFF2 subsetting, so a large
@@ -80,12 +81,17 @@ export async function requestWebAndSubset({ siteUrl, font, timeoutMs = REQUEST_T
  * @returns {Promise<{done: string[], pending: string[]}>}
  */
 export async function verifyWebAndSubset({ client, ids, timeoutMs = DEFAULT_TIMEOUT_MS, onProgress }) {
-	const deadline = Date.now() + timeoutMs;
+	const started = Date.now();
+	const deadline = started + timeoutMs;
 	let done = [];
 	let pending = [...ids];
+	let polls = 0;
+
+	console.log(`Web/subset: verifying ${ids.length} fonts, polling every ${POLL_INTERVAL_MS}ms for up to ${Math.round(timeoutMs / 1000)}s`);
 
 	while (pending.length && Date.now() < deadline) {
 		await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+		polls++;
 		let complete = [];
 		try {
 			complete = await client.fetch(
@@ -100,10 +106,16 @@ export async function verifyWebAndSubset({ client, ids, timeoutMs = DEFAULT_TIME
 			const finished = new Set(complete);
 			done = [...done, ...complete];
 			pending = pending.filter((id) => !finished.has(id));
+			console.log(`Web/subset: poll ${polls} — ${done.length}/${ids.length} confirmed (${Date.now() - started}ms elapsed)`);
 			if (onProgress) onProgress({ done: done.length, total: ids.length });
+		} else if (polls % 5 === 0) {
+			// Heartbeat on an otherwise silent poll, so a stalled worker is visibly stalled rather
+			// than just quiet.
+			console.log(`Web/subset: poll ${polls} — still ${pending.length} pending (${Date.now() - started}ms elapsed)`);
 		}
 	}
 
+	console.log(`Web/subset: verification finished after ${polls} polls in ${Date.now() - started}ms — ${done.length} confirmed, ${pending.length} pending`);
 	return { done, pending };
 }
 
@@ -121,7 +133,8 @@ export async function verifyWebAndSubset({ client, ids, timeoutMs = DEFAULT_TIME
  */
 export async function collectFontsForGeneration({ client, ids = [], force = false }) {
 	if (!ids.length) return [];
-	const docs = await client.fetch(
+	const started = Date.now();
+	const docs = await withTimeout(client.fetch(
 		`*[_type == "font" && _id in $ids]{
 			_id, title, variableFont, style, weight,
 			"woff2Url": fileInput.woff2.asset->url,
@@ -130,10 +143,14 @@ export async function collectFontsForGeneration({ client, ids = [], force = fals
 			"hasSubset": defined(fileInput.woff2_subset)
 		}`,
 		{ ids }
-	);
-	return docs
+	), REQUEST_TIMEOUT_MS, 'Web/subset font lookup');
+
+	const usable = docs
 		.filter((d) => d.woff2Url && (force || !d.hasWeb || !d.hasSubset))
 		.map(({ hasWeb, hasSubset, ...font }) => font);
+
+	console.log(`Web/subset: read ${docs.length} of ${ids.length} font documents in ${Date.now() - started}ms, ${usable.length} need generating`);
+	return usable;
 }
 
 /**
@@ -176,9 +193,17 @@ export async function generateWebAndSubset({
 
 	if (onProgress) onProgress({ type: 'web-subset-start', total: usable.length, skipped });
 
+	// Announce the shape of the work up front. This phase is the slowest part of a large upload —
+	// server-side subsetting, `concurrency` at a time — so without a timeline in the console a
+	// legitimately slow run is indistinguishable from a stalled one.
+	const chunkCount = Math.ceil(usable.length / concurrency);
+	const fanOutStart = Date.now();
+	console.log(`Web/subset: requesting ${usable.length} fonts in ${chunkCount} chunks of ${concurrency} from ${siteUrl}`);
+
 	// Throttled fan-out — the worker does real subsetting work per font.
 	for (let i = 0; i < usable.length; i += concurrency) {
 		const chunk = usable.slice(i, i + concurrency);
+		const chunkStart = Date.now();
 		await Promise.all(
 			chunk.map((font) =>
 				requestWebAndSubset({ siteUrl, font }).catch((err) => {
@@ -186,8 +211,11 @@ export async function generateWebAndSubset({
 				})
 			)
 		);
+		console.log(`Web/subset: chunk ${Math.floor(i / concurrency) + 1}/${chunkCount} done in ${Date.now() - chunkStart}ms (${Date.now() - fanOutStart}ms elapsed)`);
 		if (onProgress) onProgress({ type: 'web-subset-requested', requested: Math.min(i + concurrency, usable.length), total: usable.length });
 	}
+
+	console.log(`Web/subset: all ${usable.length} requests sent in ${Date.now() - fanOutStart}ms`);
 
 	if (!verify) return { requested: usable.length, skipped, done: [], pending: usable.map((f) => f._id) };
 
