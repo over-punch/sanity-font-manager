@@ -30,6 +30,8 @@ export default function UploadStep3Execute({
 	const [execState, execDispatch] = useReducer(executionReducer, null, createInitialExecutionState);
 	const [result, setResult] = useState(null);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
+	// Derived-file generation progress, shown once the typeface patch has landed — { done, total }
+	const [subsetProgress, setSubsetProgress] = useState(null);
 	const startedRef = useRef(false);
 	const timerRef = useRef(null);
 	const wakeLockRef = useRef(null);
@@ -86,6 +88,12 @@ export default function UploadStep3Execute({
 					execDispatch({ type: 'SET_EXECUTION_STATUS', status: 'patching-typeface' });
 				} else if (event.type === 'typeface-error') {
 					execDispatch({ type: 'SET_EXECUTION_ERROR', error: event.error });
+				} else if (event.type === 'web-subset-collecting' || event.type === 'web-subset-start') {
+					// The typeface patch is done by now — say what is actually happening, or several
+					// minutes of subset polling read as a hung patch.
+					execDispatch({ type: 'SET_EXECUTION_STATUS', status: 'generating-web-subset' });
+				} else if (event.type === 'web-subset-progress') {
+					setSubsetProgress({ done: event.done ?? 0, total: event.total ?? 0 });
 				}
 			},
 		}).then((executionResult) => {
@@ -150,11 +158,15 @@ export default function UploadStep3Execute({
 						<Text size={1} weight="semibold">
 							{execState.status === 'patching-typeface'
 								? 'Updating typeface document...'
-								: execState.status === 'complete'
-									? 'Upload complete'
-									: execState.status === 'error'
-										? 'Upload failed'
-										: `Uploading ${completedCount} of ${fontEntries.length} fonts...`
+								: execState.status === 'generating-web-subset'
+									? (subsetProgress?.total
+										? `Generating web copies and subsets (${subsetProgress.done} of ${subsetProgress.total})...`
+										: 'Generating web copies and subsets...')
+									: execState.status === 'complete'
+										? 'Upload complete'
+										: execState.status === 'error'
+											? 'Upload failed'
+											: `Uploading ${completedCount} of ${fontEntries.length} fonts...`
 							}
 						</Text>
 						<Text size={1} muted style={{ marginLeft: 'auto' }}>{formatElapsed(elapsedSeconds)}</Text>

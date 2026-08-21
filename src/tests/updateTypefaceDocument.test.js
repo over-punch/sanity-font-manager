@@ -1,6 +1,7 @@
 // Tests for updateTypefaceDocument — subfamily grouping, patch assembly, preferred style, deduplication
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { updateTypefaceDocument } from '../utils/updateTypefaceDocument';
+import { TYPEFACE_PATCH_TIMEOUT_MS } from '../utils/planTypes';
 
 // ---------------------------------------------------------------------------
 // Mock Sanity client builder
@@ -255,12 +256,32 @@ describe('client interactions', () => {
 		expect(client.patch).toHaveBeenCalledTimes(1);
 	});
 
-	it('calls setError when the client throws', async () => {
+	it('calls setError and rethrows when the client throws', async () => {
 		const badClient = mockClient();
 		badClient._patch.commit.mockRejectedValue(new Error('Network error'));
 		const setError = vi.fn();
-		await run({ client: badClient, setError });
+		// Rethrowing is what lets executeUploadPlan record typefacePatchError and what makes
+		// UploadSummary's retry button report honestly — swallowing here reported a failed
+		// patch as a successful upload.
+		await expect(run({ client: badClient, setError })).rejects.toThrow('Network error');
 		expect(setError).toHaveBeenCalledWith(true);
+	});
+
+	it('rejects rather than hanging when the commit never settles', async () => {
+		vi.useFakeTimers();
+		try {
+			const stalledClient = mockClient();
+			stalledClient._patch.commit.mockReturnValue(new Promise(() => {}));
+			const setError = vi.fn();
+
+			const pending = run({ client: stalledClient, setError });
+			const assertion = expect(pending).rejects.toThrow(/timed out/);
+			await vi.advanceTimersByTimeAsync(TYPEFACE_PATCH_TIMEOUT_MS + 1000);
+			await assertion;
+			expect(setError).toHaveBeenCalledWith(true);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('calls setStatus at least twice during a normal run', async () => {

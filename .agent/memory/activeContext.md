@@ -1,8 +1,33 @@
 # Active Context — @liiift-studio/sanity-font-manager
 
-Last updated: 2026-08-15
+Last updated: 2026-08-21
 
 ## Recent state
+
+- **`fix/batch-upload-hang` — the typeface patch could hang the uploader forever.** Reported by
+  MCKL: the batch uploader sits on "Updating typeface document..." with every font asset and
+  document already committed. The status is set by the `typeface-patching` event in
+  `executeUploadPlan` and only cleared when the whole run resolves, so the stall is inside
+  `updateTypefaceDocument`. Two defects, both present unchanged from 2.11.9 through 2.20.0 — the
+  commit path never moved, so no version bump was ever going to fix this.
+  - **No deadline.** Nothing bounded a Sanity request in that function, so a stalled fetch or
+    commit hung its await permanently. `withTimeout` and `TYPEFACE_PATCH_TIMEOUT_MS` (60s) now wrap
+    the stale-reference lookup, the draft commit, and the published lookup and commit.
+  - **Swallowed errors.** The commit's `catch` reported through `setStatus`/`setError` and returned
+    normally, so `executeUploadPlan`'s `catch` was unreachable, `result.typefacePatchError` stayed
+    `null`, and a failed patch was reported as a *successful* upload. `UploadSummary`'s
+    retry-the-patch button had the same hole — it awaits `updateTypefaceDocument` in a `try/catch`
+    that could never fire, so every retry claimed success. Rethrows after reporting now.
+  - Logs `Typeface patch size: { fonts, variableFont, subfamilyRefs, bytes }` before the commit.
+    Deliberately did **not** split the patch into several commits: `styles.fonts` and
+    `styles.subfamilies[].fonts` have to agree, and a half-applied write recreates exactly the
+    orphaned-reference corruption v2.19.1 was written to stop. Split only with size evidence.
+  - `executeUploadPlan` now emits `web-subset-collecting`, and `UploadStep3Execute` shows
+    "Generating web copies and subsets" for it. The web/subset phase runs *after* the patch and
+    polls for up to three minutes; with the status left unchanged it read as the same hang.
+  - Root cause of the original stall is still unconfirmed — it needs a console from a live repro.
+    The timeout converts the freeze into `Typeface patch timed out after 60s`, which is the
+    diagnostic. 467 tests pass.
 
 - **v2.19.1 — stop orphaning font references, and stop refreshing features with nothing.**
   - `updateTypefaceDocument` only ever appended to `styles.fonts`, `styles.variableFont` and each

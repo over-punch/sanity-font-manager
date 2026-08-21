@@ -39,6 +39,10 @@ export async function executeUploadPlan({
 	preferredStyleRef = {},
 	onProgress,
 }) {
+	// Wall-clock origin for the phase timeline logged below. A batch upload has four sequential
+	// phases and only the console can say which one a stalled run is sitting in.
+	const runStart = Date.now();
+
 	const result = {
 		success: true,
 		created: 0,
@@ -144,8 +148,11 @@ export async function executeUploadPlan({
 		}
 	}
 
+	console.log(`Upload phase: fonts done in ${Date.now() - runStart}ms — ${result.created} created, ${result.updated} updated, ${result.failed} failed`);
+
 	// Patch the typeface document with new font references
 	if (result.fontRefs.length > 0 || result.variableRefs.length > 0) {
+		const patchStart = Date.now();
 		try {
 			if (onProgress) {
 				onProgress({ type: 'typeface-patching' });
@@ -166,13 +173,14 @@ export async function executeUploadPlan({
 				(err) => { if (err) console.error('Typeface patch error flag set'); },
 			);
 
+			console.log(`Upload phase: typeface patched in ${Date.now() - patchStart}ms`);
 			if (onProgress) {
 				onProgress({ type: 'typeface-patched' });
 			}
 		} catch (err) {
 			result.typefacePatchError = err.message;
 			result.success = false;
-			console.error('Typeface patch failed:', err.message);
+			console.error(`Typeface patch failed after ${Date.now() - patchStart}ms:`, err.message);
 
 			if (onProgress) {
 				onProgress({ type: 'typeface-error', error: err.message });
@@ -184,25 +192,46 @@ export async function executeUploadPlan({
 	// it needs both the `fileInput.woff2_web`/`woff2_subset` schema fields AND a subset-capable
 	// /api/sanity/fontWorker on the consuming site. Never fails the run — the fonts themselves are
 	// already uploaded, so a missing derived file is a warning, not a failed upload.
+	if (!plan.settings?.webAndSubset) {
+		console.log(`Upload phase: web/subset generation is off for this studio — run complete in ${Date.now() - runStart}ms`);
+	}
+
 	if (plan.settings?.webAndSubset) {
+		const subsetStart = Date.now();
 		try {
-			// Read back what actually landed rather than trusting the plan, and skip any font that
-			// already has both derived files.
+			// Announce the phase change before the first read. Without this the UI keeps showing
+			// 'Updating typeface document...' through several minutes of subset polling, which is
+			// indistinguishable from the patch itself having hung.
+			if (onProgress) {
+				onProgress({ type: 'web-subset-collecting' });
+			}
+
+			// Only wait on `woff2_subset` where the studio says its fontWorker writes it. Otherwise
+			// both the completeness check below and the verifier treat the web copy as the finish
+			// line — see generateWebAndSubset for why requiring an absent field stalls every run.
+			const requireSubset = plan.settings?.requireSubset === true;
+
+			// Read back what actually landed rather than trusting the plan, and skip any font whose
+			// derived files are already in place.
 			const ids = [...result.fontRefs, ...result.variableRefs].map((r) => r._ref).filter(Boolean);
-			const fonts = await collectFontsForGeneration({ client, ids });
+			const fonts = await collectFontsForGeneration({ client, ids, requireSubset });
 
 			const summary = await generateWebAndSubset({
 				client,
 				siteUrl: plan.settings.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
 				fonts,
+				requireSubset,
 				onProgress: (p) => { if (onProgress) onProgress(p); },
 			});
 			result.webAndSubset = summary;
+			console.log(`Upload phase: web/subset finished in ${Date.now() - subsetStart}ms`, summary);
 		} catch (err) {
-			console.warn('Web/subset generation failed:', err.message);
+			console.warn(`Web/subset generation failed after ${Date.now() - subsetStart}ms:`, err.message);
 			result.webAndSubset = { error: err.message };
 		}
 	}
+
+	console.log(`Upload run complete in ${Date.now() - runStart}ms`);
 
 	if (onProgress) {
 		onProgress({ type: 'execution-complete', result });
