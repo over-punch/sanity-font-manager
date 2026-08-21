@@ -206,15 +206,21 @@ export async function executeUploadPlan({
 				onProgress({ type: 'web-subset-collecting' });
 			}
 
-			// Read back what actually landed rather than trusting the plan, and skip any font that
-			// already has both derived files.
+			// Only wait on `woff2_subset` where the studio says its fontWorker writes it. Otherwise
+			// both the completeness check below and the verifier treat the web copy as the finish
+			// line — see generateWebAndSubset for why requiring an absent field stalls every run.
+			const requireSubset = plan.settings?.requireSubset === true;
+
+			// Read back what actually landed rather than trusting the plan, and skip any font whose
+			// derived files are already in place.
 			const ids = [...result.fontRefs, ...result.variableRefs].map((r) => r._ref).filter(Boolean);
-			const fonts = await collectFontsForGeneration({ client, ids });
+			const fonts = await collectFontsForGeneration({ client, ids, requireSubset });
 
 			const summary = await generateWebAndSubset({
 				client,
 				siteUrl: plan.settings.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
 				fonts,
+				requireSubset,
 				onProgress: (p) => { if (onProgress) onProgress(p); },
 			});
 			result.webAndSubset = summary;

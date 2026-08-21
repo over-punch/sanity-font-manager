@@ -72,22 +72,34 @@ export async function requestWebAndSubset({ siteUrl, font, timeoutMs = REQUEST_T
 }
 
 /**
- * Polls Sanity until every id has both derived files, or the timeout expires.
+ * Polls Sanity until every id has the derived files it is waiting on, or the timeout expires.
+ *
+ * Only `woff2_web` is required by default. Requiring `woff2_subset` too means the poll can only
+ * succeed on a site whose fontWorker actually writes it — and where it does not, every run burns
+ * the entire timeout waiting for a field that is never coming, then reports the whole batch as
+ * pending. That silent full-timeout wait, displayed as the typeface patch still running, is what
+ * MCKL reported as the uploader hanging. Studios whose worker produces both can opt in.
+ *
  * @param {object} params
  * @param {object} params.client - Sanity client
  * @param {string[]} params.ids - font document ids to watch
  * @param {number} [params.timeoutMs]
+ * @param {boolean} [params.requireSubset] - also wait for `fileInput.woff2_subset`
  * @param {function} [params.onProgress] - called with { done, total }
  * @returns {Promise<{done: string[], pending: string[]}>}
  */
-export async function verifyWebAndSubset({ client, ids, timeoutMs = DEFAULT_TIMEOUT_MS, onProgress }) {
+export async function verifyWebAndSubset({ client, ids, timeoutMs = DEFAULT_TIMEOUT_MS, requireSubset = false, onProgress }) {
 	const started = Date.now();
 	const deadline = started + timeoutMs;
 	let done = [];
 	let pending = [...ids];
 	let polls = 0;
 
-	console.log(`Web/subset: verifying ${ids.length} fonts, polling every ${POLL_INTERVAL_MS}ms for up to ${Math.round(timeoutMs / 1000)}s`);
+	const predicate = requireSubset
+		? 'defined(fileInput.woff2_web) && defined(fileInput.woff2_subset)'
+		: 'defined(fileInput.woff2_web)';
+
+	console.log(`Web/subset: verifying ${ids.length} fonts (${requireSubset ? 'web + subset' : 'web only'}), polling every ${POLL_INTERVAL_MS}ms for up to ${Math.round(timeoutMs / 1000)}s`);
 
 	while (pending.length && Date.now() < deadline) {
 		await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -95,7 +107,7 @@ export async function verifyWebAndSubset({ client, ids, timeoutMs = DEFAULT_TIME
 		let complete = [];
 		try {
 			complete = await client.fetch(
-				`*[_type == "font" && _id in $ids && defined(fileInput.woff2_web) && defined(fileInput.woff2_subset)]._id`,
+				`*[_type == "font" && _id in $ids && ${predicate}]._id`,
 				{ ids: pending }
 			);
 		} catch (err) {
@@ -131,7 +143,7 @@ export async function verifyWebAndSubset({ client, ids, timeoutMs = DEFAULT_TIME
  * @param {boolean} [params.force] - include fonts that already have both files
  * @returns {Promise<object[]>} fonts ready to pass to `generateWebAndSubset`
  */
-export async function collectFontsForGeneration({ client, ids = [], force = false }) {
+export async function collectFontsForGeneration({ client, ids = [], force = false, requireSubset = false }) {
 	if (!ids.length) return [];
 	const started = Date.now();
 	const docs = await withTimeout(client.fetch(
@@ -145,8 +157,12 @@ export async function collectFontsForGeneration({ client, ids = [], force = fals
 		{ ids }
 	), REQUEST_TIMEOUT_MS, 'Web/subset font lookup');
 
+	// What counts as "already done" has to match what the verifier waits for. Judging completeness
+	// on a field the site never writes leaves every font eligible forever, so each upload re-runs
+	// the server-side subsetting for fonts that were finished the first time.
+	const isComplete = (d) => (requireSubset ? d.hasWeb && d.hasSubset : d.hasWeb);
 	const usable = docs
-		.filter((d) => d.woff2Url && (force || !d.hasWeb || !d.hasSubset))
+		.filter((d) => d.woff2Url && (force || !isComplete(d)))
 		.map(({ hasWeb, hasSubset, ...font }) => font);
 
 	console.log(`Web/subset: read ${docs.length} of ${ids.length} font documents in ${Date.now() - started}ms, ${usable.length} need generating`);
@@ -170,6 +186,9 @@ export async function collectFontsForGeneration({ client, ids = [], force = fals
  * @param {number} [params.concurrency]
  * @param {number} [params.timeoutMs]
  * @param {boolean} [params.verify] - poll Sanity to confirm the files landed (default true)
+ * @param {boolean} [params.requireSubset] - only confirm a font once `woff2_subset` lands too;
+ *   leave off unless the site's fontWorker demonstrably writes that field, or every run waits out
+ *   the full timeout for a file that never arrives
  * @param {function} [params.onProgress] - called with { type, ... }
  * @returns {Promise<{requested: number, skipped: number, done: string[], pending: string[]}>}
  */
@@ -180,6 +199,7 @@ export async function generateWebAndSubset({
 	concurrency = DEFAULT_CONCURRENCY,
 	timeoutMs = DEFAULT_TIMEOUT_MS,
 	verify = true,
+	requireSubset = false,
 	onProgress,
 }) {
 	const usable = fonts.filter((f) => f?._id && f?.woff2Url);
@@ -223,6 +243,7 @@ export async function generateWebAndSubset({
 		client,
 		ids: usable.map((f) => f._id),
 		timeoutMs,
+		requireSubset,
 		onProgress: (p) => { if (onProgress) onProgress({ type: 'web-subset-progress', ...p }); },
 	});
 

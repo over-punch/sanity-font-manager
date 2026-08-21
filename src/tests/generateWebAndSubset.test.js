@@ -95,7 +95,7 @@ describe('requestWebAndSubset', () => {
 });
 
 describe('collectFontsForGeneration', () => {
-	it('skips fonts that already have both derived files', async () => {
+	it('skips fonts whose web copy is already in place', async () => {
 		const client = {
 			fetch: vi.fn().mockResolvedValue([
 				{ _id: 'a', woff2Url: 'u', hasWeb: true, hasSubset: true },
@@ -104,9 +104,23 @@ describe('collectFontsForGeneration', () => {
 			]),
 		};
 		const out = await collectFontsForGeneration({ client, ids: ['a', 'b', 'c'] });
-		expect(out.map((f) => f._id)).toEqual(['b', 'c']);
+		// 'b' is finished by default: the site is not expected to write woff2_subset, and treating
+		// it as unfinished re-runs the server-side subsetting on every subsequent upload.
+		expect(out.map((f) => f._id)).toEqual(['c']);
 		// The internal flags must not leak into the request payload.
 		expect(out[0]).not.toHaveProperty('hasWeb');
+	});
+
+	it('still treats a missing subset as unfinished when the studio requires it', async () => {
+		const client = {
+			fetch: vi.fn().mockResolvedValue([
+				{ _id: 'a', woff2Url: 'u', hasWeb: true, hasSubset: true },
+				{ _id: 'b', woff2Url: 'u', hasWeb: true, hasSubset: false },
+				{ _id: 'c', woff2Url: 'u', hasWeb: false, hasSubset: false },
+			]),
+		};
+		const out = await collectFontsForGeneration({ client, ids: ['a', 'b', 'c'], requireSubset: true });
+		expect(out.map((f) => f._id)).toEqual(['b', 'c']);
 	});
 
 	it('skips fonts with no WOFF2 to subset', async () => {
@@ -192,5 +206,53 @@ describe('verifyWebAndSubset', () => {
 		const p = verifyWebAndSubset({ client, ids: ['a'], timeoutMs: 30000 });
 		await vi.advanceTimersByTimeAsync(12000);
 		await expect(p).resolves.toMatchObject({ done: ['a'] });
+	});
+});
+
+// ---------------------------------------------------------------------------
+// requireSubset — waiting on a field the site never writes
+// ---------------------------------------------------------------------------
+
+describe('requireSubset', () => {
+	it('confirms on the web copy alone by default', async () => {
+		const client = { fetch: vi.fn().mockResolvedValue(['a']) };
+		const run = verifyWebAndSubset({ client, ids: ['a'], timeoutMs: 60000 });
+		await vi.advanceTimersByTimeAsync(5000);
+		const { done, pending } = await run;
+		expect(done).toEqual(['a']);
+		expect(pending).toEqual([]);
+		// The predicate must not mention the subset field, or a site that never writes it can
+		// never satisfy the poll.
+		expect(client.fetch.mock.calls[0][0]).not.toContain('woff2_subset');
+	});
+
+	it('waits for the subset field only when asked', async () => {
+		const client = { fetch: vi.fn().mockResolvedValue(['a']) };
+		const run = verifyWebAndSubset({ client, ids: ['a'], timeoutMs: 60000, requireSubset: true });
+		await vi.advanceTimersByTimeAsync(5000);
+		await run;
+		expect(client.fetch.mock.calls[0][0]).toContain('woff2_subset');
+	});
+
+	it('does not regenerate a font that already has its web copy', async () => {
+		// The regression: judging completeness on an absent field leaves every font eligible
+		// forever, so each upload re-runs the server-side subsetting for finished fonts.
+		const client = {
+			fetch: vi.fn().mockResolvedValue([
+				{ _id: 'a', title: 'a', woff2Url: 'https://cdn/a.woff2', hasWeb: true, hasSubset: false },
+			]),
+		};
+		const fonts = await collectFontsForGeneration({ client, ids: ['a'] });
+		expect(fonts).toEqual([]);
+	});
+
+	it('still regenerates that font when the studio requires subsets', async () => {
+		const client = {
+			fetch: vi.fn().mockResolvedValue([
+				{ _id: 'a', title: 'a', woff2Url: 'https://cdn/a.woff2', hasWeb: true, hasSubset: false },
+			]),
+		};
+		const fonts = await collectFontsForGeneration({ client, ids: ['a'], requireSubset: true });
+		expect(fonts).toHaveLength(1);
 	});
 });
