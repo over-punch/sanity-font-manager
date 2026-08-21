@@ -4,6 +4,19 @@ Last updated: 2026-08-15
 
 ## Recent state
 
+- **v2.19.1 — stop orphaning font references, and stop refreshing features with nothing.**
+  - `updateTypefaceDocument` only ever appended to `styles.fonts`, `styles.variableFont` and each
+    `styles.subfamilies[].fonts`, so a font whose document id changed stayed referenced forever. The
+    dead reference dereferences to `null`, and one `null` in a subfamily is enough to fail MCKL's
+    whole site build — `pairItalics` in `pages/typefaces/[typeface].js` reads `.weightName` off every
+    entry. Seen live: Owners' seven `owners-*-italic` documents were retitled onto
+    `owners-*-regular-italic` ids, `styles.fonts` came out clean, and all seven subfamilies kept
+    pointing at the deleted originals. One existence query now prunes dead refs across every array
+    the patch writes; a draft-only font counts as live so a style mid-creation is never pruned, and
+    a failed lookup leaves the arrays untouched rather than wiping them.
+  - `executeUploadPlan` refreshed `opentypeFeatures` on any truthy value, including the
+    parse-failure `{ chars: [], featureList: [] }` — gated on `chars.length` now.
+
 - **v2.19.0 — the variable font is the source of truth for labels.** `collectSupportedTags` now
   feeds documents through `orderByAuthority`, a stable sort putting `variableFont === true` first, so
   a VF's names beat the statics' while statics still fill tags the VF leaves unnamed. `SetOTF`'s GROQ
@@ -76,11 +89,11 @@ Last updated: 2026-08-15
   working tree on `feature/opentype-feature-titles`, but is **uncommitted and undeployed**. Until it
   ships, Studio-side Build and the site-side rebuild fight over this field.
 
-- **`executeUploadPlan` can refresh `opentypeFeatures` with empties.** The re-upload path does
-  `if (entry.opentypeFeatures) refreshFields.opentypeFeatures = entry.opentypeFeatures`, which is
-  truthy for the parse-failure entry `{ chars: [], featureList: [] }` — overwriting a document's good
-  data. Pre-existing (the old shape `{ chars: [] }` was truthy too), now costing labels as well.
-  `uploadFontFiles` guards this; `executeUploadPlan` does not.
+- **MCKL's Owners typeface still has the seven dangling subfamily references** that exposed the
+  orphaning bug. 2.19.1 stops new ones appearing but does not repair existing data: the refs must be
+  repointed to the `owners-*-regular-italic` ids, or the site build keeps failing on
+  `/typefaces/owners`. A null guard in `pairItalics` would also stop one dead reference taking down
+  a whole build; neither is done.
 
 - **`pako` is imported but never declared.** `utils/setupDecompressors.js` imports `pako`, which is
   absent from `dependencies`, so 8 test files fail to load on a clean `npm ci` (`libfont-integration`,

@@ -3,6 +3,48 @@
 import { nanoid } from 'nanoid';
 
 /**
+ * Drops references whose font document no longer exists.
+ *
+ * Reference arrays here are only ever appended to, so a font whose document id changed — a retitle
+ * that lands on a new id, leaving the old document deleted — stays referenced forever. The stale
+ * reference dereferences to `null`, and a `null` in `styles.subfamilies[].fonts` is enough to fail
+ * the whole site build: MCKL's typeface page pairs romans with italics by reading `.weightName`
+ * off each entry.
+ *
+ * A font that exists only as a draft counts as existing — a style mid-creation must not be pruned.
+ *
+ * @param {Object[]} refs - reference objects carrying `_ref`
+ * @param {Set<string>} live - ids known to exist, published or draft
+ * @returns {Object[]} the references whose targets are still there
+ */
+const keepLiveRefs = (refs, live) => (refs || []).filter((ref) => !ref?._ref || live.has(ref._ref));
+
+/**
+ * Collects every font id the typeface still resolves, published or draft.
+ *
+ * One query for the whole patch rather than one per array — a wide family carries hundreds of
+ * references across `styles.fonts` and the subfamily groups.
+ *
+ * @param {Object[]} refArrays - arrays of reference objects to check
+ * @param {Object} client - Sanity client
+ * @returns {Promise<Set<string>>} ids that exist; empty when the lookup fails
+ */
+const fetchLiveFontIds = async (refArrays, client) => {
+	const ids = [...new Set(refArrays.flat().map((ref) => ref?._ref).filter(Boolean))];
+	if (!ids.length) return new Set();
+
+	const draftIds = ids.map((id) => (id.startsWith('drafts.') ? id : `drafts.${id}`));
+	const found = await client.fetch(`*[_id in $ids || _id in $draftIds]._id`, { ids, draftIds });
+
+	// Report a draft hit under the published id, which is what the reference stores.
+	return new Set(
+		(found || [])
+			.filter((id) => typeof id === 'string')
+			.map((id) => (id.startsWith('drafts.') ? id.slice('drafts.'.length) : id)),
+	);
+};
+
+/**
  * Patches a typeface document (draft and published) with the new font references,
  * subfamily structure, and preferred style derived from the upload batch.
  *
@@ -51,9 +93,12 @@ export const updateTypefaceDocument = async (
 		return merged;
 	};
 
+	const mergedFonts = dedupeRefs(stylesObject.fonts, fontRefs);
+	const mergedVariable = dedupeRefs(stylesObject?.variableFont, variableRefs);
+
 	let patch = {
-		'styles.fonts': dedupeRefs(stylesObject.fonts, fontRefs),
-		'styles.variableFont': dedupeRefs(stylesObject?.variableFont, variableRefs),
+		'styles.fonts': mergedFonts,
+		'styles.variableFont': mergedVariable,
 	};
 
 	setStatus('Organising font subfamilies...');
@@ -94,6 +139,22 @@ export const updateTypefaceDocument = async (
 				index === self.findIndex(f => f._ref === font._ref)
 			),
 		}));
+	}
+
+	// Prune references to fonts that no longer exist, across every array this patch writes. Done
+	// once here, after the merges, so a stale reference cannot survive in one array while the
+	// others are rebuilt — the split that left MCKL's Owners subfamilies pointing at deleted
+	// italics while `styles.fonts` stayed clean.
+	try {
+		const live = await fetchLiveFontIds([mergedFonts, mergedVariable, ...subfamiliesArray.map((sf) => sf.fonts || [])], client);
+		if (live.size) {
+			patch['styles.fonts'] = keepLiveRefs(mergedFonts, live);
+			patch['styles.variableFont'] = keepLiveRefs(mergedVariable, live);
+			subfamiliesArray = subfamiliesArray.map((sf) => ({ ...sf, fonts: keepLiveRefs(sf.fonts, live) }));
+		}
+	} catch (err) {
+		// Pruning is housekeeping — never lose the upload over it.
+		console.warn('Could not check font references for stale entries:', err.message);
 	}
 
 	patch['styles.subfamilies'] = subfamiliesArray;
