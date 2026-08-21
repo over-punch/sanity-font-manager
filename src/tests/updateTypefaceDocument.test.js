@@ -359,3 +359,74 @@ describe('dot-path patch keys', () => {
 		expect(patch['styles.displayStyles']).toBeUndefined();
 	});
 });
+
+// ---------------------------------------------------------------------------
+// Pruning references to fonts that no longer exist
+// ---------------------------------------------------------------------------
+
+describe('stale reference pruning', () => {
+	/** Client whose existence lookup reports only `liveIds`, leaving other fetches to the defaults */
+	const clientWithLiveIds = (liveIds) => {
+		const patchObj = { set: vi.fn().mockReturnThis(), commit: vi.fn().mockResolvedValue(undefined) };
+		return {
+			patch: vi.fn().mockImplementation(() => patchObj),
+			fetch: vi.fn().mockImplementation((query) => {
+				if (query.includes('$draftIds')) return Promise.resolve(liveIds);
+				if (query.includes('$publishedId')) return Promise.resolve([]);
+				return Promise.resolve([null]);
+			}),
+			_patch: patchObj,
+		};
+	};
+
+	/** The object handed to .set() on the typeface patch */
+	const patchArg = (client) => client._patch.set.mock.calls[0][0];
+
+	const ref = (id) => ({ _ref: id, _key: id, _type: 'reference', _weak: true });
+
+	it('drops a subfamily reference whose font was deleted', async () => {
+		// The Owners case: a retitle landed the italics on new ids, and the subfamily groups kept
+		// pointing at the old ones. Each stale ref dereferences to null and fails the site build.
+		const client = clientWithLiveIds(['owners-regular-italic']);
+		await run({
+			client,
+			subfamiliesArray: [{ title: 'Regular', _key: 'k', fonts: [ref('owners-italic'), ref('owners-regular-italic')] }],
+		});
+		expect(patchArg(client)['styles.subfamilies'][0].fonts.map((f) => f._ref)).toEqual(['owners-regular-italic']);
+	});
+
+	it('drops stale entries from styles.fonts too', async () => {
+		const client = clientWithLiveIds(['live-font']);
+		await run({ client, stylesObject: { fonts: [ref('dead-font'), ref('live-font')] } });
+		expect(patchArg(client)['styles.fonts'].map((f) => f._ref)).toEqual(['live-font']);
+	});
+
+	it('keeps a font that exists only as a draft', async () => {
+		// A style mid-creation has no published document yet — pruning it would undo the upload.
+		const client = clientWithLiveIds(['drafts.brand-new']);
+		await run({ client, stylesObject: { fonts: [ref('brand-new')] } });
+		expect(patchArg(client)['styles.fonts'].map((f) => f._ref)).toEqual(['brand-new']);
+	});
+
+	it('leaves everything alone when the lookup returns nothing', async () => {
+		// An empty result means the query failed or matched nothing — not licence to wipe the arrays.
+		const client = clientWithLiveIds([]);
+		await run({ client, stylesObject: { fonts: [ref('a'), ref('b')] } });
+		expect(patchArg(client)['styles.fonts'].map((f) => f._ref)).toEqual(['a', 'b']);
+	});
+
+	it('still writes the patch when the lookup throws', async () => {
+		const patchObj = { set: vi.fn().mockReturnThis(), commit: vi.fn().mockResolvedValue(undefined) };
+		const client = {
+			patch: vi.fn().mockImplementation(() => patchObj),
+			fetch: vi.fn().mockImplementation((query) => {
+				if (query.includes('$draftIds')) return Promise.reject(new Error('network'));
+				return Promise.resolve([]);
+			}),
+			_patch: patchObj,
+		};
+		await run({ client, stylesObject: { fonts: [ref('a')] } });
+		expect(patchObj.set.mock.calls[0][0]['styles.fonts'].map((f) => f._ref)).toEqual(['a']);
+		expect(patchObj.commit).toHaveBeenCalled();
+	});
+});

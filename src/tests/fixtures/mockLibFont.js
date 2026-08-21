@@ -164,3 +164,40 @@ export function mockBoldItalicFont(overrides = {}) {
 		...overrides,
 	});
 }
+
+/**
+ * Creates a mock GSUB/GPOS layout table exposing the given features.
+ *
+ * Mirrors lib-font's accessor shape — scripts → langsys → features — closely enough for
+ * `getAllFeatureTags` and `getFeatureUiNames`, including the lazy `getFeatureParams()` that only
+ * stylistic sets and character variants answer.
+ *
+ * @param {Array<{tag: string, params?: object, throws?: boolean}>} features - features the table
+ *   exposes. `params` is the FeatureParams record (`{UINameID}` for ssXX, `{featUiLabelNameId}`
+ *   for cvXX); `throws` makes `getFeatureParams()` throw, as a malformed offset would.
+ * @param {object} [options]
+ * @param {string[]} [options.scripts] - script tags to report, defaults to a single DFLT script
+ * @param {string[]} [options.langs] - langsys tags per script, defaults to a single dflt entry
+ * @returns {object} Mock layout table
+ */
+export function mockLayoutTable(features = [], options = {}) {
+	const { scripts = ['DFLT'], langs = ['dflt'] } = options;
+
+	const featureTables = features.map(({ tag, params, throws }) => ({
+		featureTag: tag,
+		getFeatureParams: () => {
+			if (throws) throw new Error(`bad FeatureParams offset for ${tag}`);
+			return params;
+		},
+	}));
+
+	return {
+		getSupportedScripts: () => scripts,
+		getScriptTable: (scriptTag) => ({ scriptTag }),
+		getSupportedLangSys: () => langs,
+		getLangSysTable: (script, langSysTag) => ({ langSysTag }),
+		// lib-font materialises a fresh FeatureTable per call; the same tags recur for every
+		// script/language pair, which is exactly the repetition the callers have to deduplicate.
+		getFeatures: () => featureTables,
+	};
+}

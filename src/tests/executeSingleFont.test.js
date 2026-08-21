@@ -18,6 +18,7 @@ vi.mock('../utils/generateFontData', () => ({
 }));
 vi.mock('../utils/generateCssFile', () => ({ default: vi.fn(async () => ({})) }));
 
+import generateFontData from '../utils/generateFontData';
 import { executeSingleFont } from '../utils/executeUploadPlan';
 import { RECOMMENDATION } from '../utils/planTypes';
 
@@ -170,5 +171,52 @@ describe('executeSingleFont', () => {
 		});
 		expect(res.isNew).toBe(true);
 		expect(res.convertedToUpdate).toBe(false);
+	});
+});
+
+describe('opentypeFeatures on a re-upload', () => {
+	/** A decision that routes executeSingleFont down the update path against an existing document */
+	const updateDecision = () => ({
+		recommendation: RECOMMENDATION.USE_EXACT,
+		userChoice: null,
+		exact: { _id: 'font-x', fileInput: {}, metaData: {}, metrics: {} },
+		candidates: [],
+	});
+
+	/** The metadata shape generateFontData resolves with, overridable per test */
+	const metadata = (opentypeFeatures) => ({
+		metaData: { unitsPerEm: 1000 },
+		metrics: { ascent: 800 },
+		variableAxes: null,
+		variableInstances: null,
+		opentypeFeatures,
+		characterSet: { chars: [] },
+		glyphCount: 42,
+		variableFont: false,
+	});
+
+	it('refreshes features and the foundry\'s names when the parse produced tags', async () => {
+		generateFontData.mockResolvedValueOnce(
+			metadata({ chars: ['liga', 'ss01'], featureList: [{ tag: 'ss01', title: 'Alt g' }] }),
+		);
+		const { client, patches } = makeClient();
+
+		await executeSingleFont({ entry: makeEntry(updateDecision()), plan: PLAN, client, progress: makeProgress(), onProgress: null });
+
+		expect(patches[0].payload.opentypeFeatures).toEqual({
+			chars: ['liga', 'ss01'],
+			featureList: [{ tag: 'ss01', title: 'Alt g' }],
+		});
+	});
+
+	it('leaves the document\'s features alone when the parse produced none', async () => {
+		// A font that fails to parse still yields `{ chars: [], featureList: [] }`, which is truthy.
+		// Refreshing with it would wipe real features and the foundry's stylistic set names.
+		generateFontData.mockResolvedValueOnce(metadata({ chars: [], featureList: [] }));
+		const { client, patches } = makeClient();
+
+		await executeSingleFont({ entry: makeEntry(updateDecision()), plan: PLAN, client, progress: makeProgress(), onProgress: null });
+
+		expect(patches[0].payload).not.toHaveProperty('opentypeFeatures');
 	});
 });

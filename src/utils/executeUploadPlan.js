@@ -391,7 +391,9 @@ export async function executeSingleFont({ entry, plan, client, progress, onProgr
 	if (entry.metrics) refreshFields.metrics = entry.metrics;
 	if (entry.variableAxes) refreshFields.variableAxes = entry.variableAxes;
 	if (entry.variableInstances) refreshFields.variableInstances = entry.variableInstances;
-	if (entry.opentypeFeatures) refreshFields.opentypeFeatures = entry.opentypeFeatures;
+	// A font that failed to parse still carries `{ chars: [], featureList: [] }`, which is truthy —
+	// refreshing with it would wipe the document's real features and the foundry's feature names.
+	if (entry.opentypeFeatures?.chars?.length) refreshFields.opentypeFeatures = entry.opentypeFeatures;
 	if (entry.characterSet) refreshFields.characterSet = entry.characterSet;
 	if (entry.glyphCount) refreshFields.glyphCount = entry.glyphCount;
 

@@ -345,6 +345,10 @@ Recalculates and patches the `subfamily` field on all fonts linked to a typeface
 
 Detects which configured OpenType feature keys are supported by the typeface's first linked font. Reads `opentypeFeatures.chars` from the font document (populated by `generateFontData`) and patches the `features` array on the field. Shows a feature count when features are detected, and clear error messages when font data is missing.
 
+Where the family ships a variable font, its labels win over the statics' — a VF is the whole family in one binary, while a static is one cut whose names may lag or be missing. Statics still fill in any tag the VF does not name.
+
+Stylistic sets and character variants are titled with the foundry's own name where the font supplies one — `ss01` becomes "Alternate g" rather than "Stylistic Set 1" — read from `opentypeFeatures.featureList`. Features the font does not name keep their `OPENTYPE_FEATURE_TAGS` title, and a title an editor has typed is never overwritten. Because the label is stored per style at upload time, fonts uploaded before 2.18.0 need their data regenerated before their names appear.
+
 Wire it up on the `openType` object field in the typeface schema:
 
 ```jsx
@@ -617,6 +621,7 @@ Parsing runs on [`lib-font`](https://github.com/Pomax/lib-font). `parseFont` is 
 | `parseFont` | `async (buffer, filename) => Font` — parses an `ArrayBuffer` into a `lib-font` `Font`. Enforces a 50 MB size limit and a 30 s timeout; throws on oversize/corrupt/timeout. |
 | `getNameString` | Reads a name-table string by numeric name ID, preferring Windows/Unicode/English then Mac/Roman, with a per-font cache. |
 | `getAllFeatureTags` | All OpenType feature tags from GSUB/GPOS (equivalent to fontkit's `availableFeatures`). |
+| `getFeatureUiNames` | Foundry-authored labels for stylistic sets and character variants, read from each feature's FeatureParams — `[{ tag, title }]` sorted by tag. |
 | `getCharacterSet` | Array of Unicode code points covered by the font. |
 | `getVariationAxes` | Variation-axis map for variable fonts (`min`/`default`/`max` per axis). |
 | `getNamedInstances` | Named instances of a variable font. |
@@ -708,7 +713,7 @@ Parsing runs on [`lib-font`](https://github.com/Pomax/lib-font). `parseFont` is 
 | `metaData` | `object` | Font metadata — `postscriptName`, `fullName`, `familyName`, `subfamilyName`, `copyright`, `version`, `genDate` |
 | `metrics` | `object` | Font metrics — `unitsPerEm`, `ascender`, `descender`, `lineGap`, `capHeight`, `xHeight`, `italicAngle`, etc. |
 | `glyphCount` | `number` | Total number of glyphs |
-| `opentypeFeatures` | `object` | Available OpenType feature tags |
+| `opentypeFeatures` | `object` | Available OpenType feature tags — `chars` (all tags) and `featureList` (`[{ tag, title }]`, the font's own names for its stylistic sets and character variants) |
 | `characterSet` | `object` | Array of Unicode code points covered by the font |
 | `variableInstanceReferences` | `array<object>` | Maps variable font instance names to static font document references — `[{ key: string, value: reference }]` |
 
