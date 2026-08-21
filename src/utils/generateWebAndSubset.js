@@ -9,6 +9,11 @@ const DEFAULT_CONCURRENCY = 4;
 const DEFAULT_TIMEOUT_MS = 180000;
 /** Gap between verification polls, in ms. */
 const POLL_INTERVAL_MS = 4000;
+/**
+ * How long a single fontWorker request may stay open before it is aborted, in ms. Generous enough
+ * for real subsetting on a cold function; the point is only to guarantee the promise settles.
+ */
+const REQUEST_TIMEOUT_MS = 60000;
 
 /**
  * Asks the consuming site's fontWorker to build the web copy and subset for one font.
@@ -23,24 +28,46 @@ const POLL_INTERVAL_MS = 4000;
  * @param {object} params
  * @param {string} params.siteUrl - base URL of the consuming site (SANITY_STUDIO_SITE_URL)
  * @param {object} params.font - { _id, title, woff2Url, filename, variableFont, style, weight }
- * @returns {Promise<void>}
+ * @param {number} [params.timeoutMs] - abort the request after this long
+ * @returns {Promise<void>} rejects on network failure or timeout; callers warn and continue
  */
-export async function requestWebAndSubset({ siteUrl, font }) {
-	await fetch(`${siteUrl}/api/sanity/fontWorker`, {
-		method: 'POST',
-		mode: 'no-cors',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			code: 'generate-subset',
-			woff2Url: font.woff2Url,
-			filename: font.filename,
-			documentId: font._id,
-			documentTitle: font.title,
-			documentVariableFont: font.variableFont,
-			documentStyle: font.style,
-			documentWeight: font.weight,
-		}),
-	});
+export async function requestWebAndSubset({ siteUrl, font, timeoutMs = REQUEST_TIMEOUT_MS }) {
+	// Abort rather than wait forever. An opaque no-cors response cannot be inspected, so a server
+	// that accepts the connection and never answers — a function hitting its platform ceiling, a
+	// proxy holding the socket — leaves this promise permanently unsettled, and the Promise.all
+	// over the chunk never resolves. That stalls the whole run with no error and no recovery.
+	//
+	// Safe to abort because success is never established by this response: verifyWebAndSubset
+	// polls Sanity for the derived files afterwards. Cancelling the request does not cancel the
+	// server-side subsetting, so a slow worker still lands and is still picked up by the poll.
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+	try {
+		await fetch(`${siteUrl}/api/sanity/fontWorker`, {
+			method: 'POST',
+			mode: 'no-cors',
+			signal: controller.signal,
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				code: 'generate-subset',
+				woff2Url: font.woff2Url,
+				filename: font.filename,
+				documentId: font._id,
+				documentTitle: font.title,
+				documentVariableFont: font.variableFont,
+				documentStyle: font.style,
+				documentWeight: font.weight,
+			}),
+		});
+	} catch (err) {
+		if (err?.name === 'AbortError') {
+			throw new Error(`fontWorker did not respond within ${Math.round(timeoutMs / 1000)}s`);
+		}
+		throw err;
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 /**

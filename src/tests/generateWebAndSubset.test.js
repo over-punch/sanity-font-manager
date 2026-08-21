@@ -46,6 +46,52 @@ describe('requestWebAndSubset', () => {
 			documentTitle: 'a',
 		});
 	});
+
+	it('passes an abort signal so a silent worker cannot stall the request', async () => {
+		await requestWebAndSubset({ siteUrl: 'https://site.test', font: font('a') });
+		const [, init] = fetch.mock.calls[0];
+		expect(init.signal).toBeDefined();
+		expect(init.signal.aborted).toBe(false);
+	});
+
+	it('rejects instead of hanging when the worker never responds', async () => {
+		// An opaque no-cors response cannot be inspected, so a server that accepts the connection
+		// and never answers leaves this promise unsettled forever — and with it the whole run.
+		fetch.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+			init.signal.addEventListener('abort', () => {
+				const err = new Error('aborted');
+				err.name = 'AbortError';
+				reject(err);
+			});
+		}));
+
+		const pending = requestWebAndSubset({ siteUrl: 'https://site.test', font: font('a'), timeoutMs: 1000 });
+		const assertion = expect(pending).rejects.toThrow(/did not respond within/);
+		await vi.advanceTimersByTimeAsync(1500);
+		await assertion;
+	});
+
+	it('lets generateWebAndSubset continue past a stalled font', async () => {
+		fetch.mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+			init.signal.addEventListener('abort', () => {
+				const err = new Error('aborted');
+				err.name = 'AbortError';
+				reject(err);
+			});
+		}));
+		const client = { fetch: vi.fn().mockResolvedValue([]) };
+
+		const run = generateWebAndSubset({
+			client,
+			siteUrl: 'https://site.test',
+			fonts: [font('a')],
+			verify: false,
+		});
+		await vi.advanceTimersByTimeAsync(120000);
+		const summary = await run;
+		// The request failed, but the upload itself is not reported as failed.
+		expect(summary.requested).toBe(1);
+	});
 });
 
 describe('collectFontsForGeneration', () => {
