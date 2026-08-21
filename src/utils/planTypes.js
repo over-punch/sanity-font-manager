@@ -224,3 +224,34 @@ export function createEmptyPlan(settings = {}) {
 		},
 	};
 }
+
+/**
+ * Timeout for a single Sanity request made while patching the typeface document, in ms.
+ * The typeface patch is the last step of a batch upload and every font asset is already
+ * committed by the time it runs, so a request that never settles strands the user on a
+ * spinner with no way back. Generous enough to absorb the client's own 429 backoff.
+ */
+export const TYPEFACE_PATCH_TIMEOUT_MS = 60000;
+
+/**
+ * Rejects if a promise has not settled within `ms`.
+ *
+ * The Sanity client does not impose a browser-side deadline, so any stalled request —
+ * a dropped socket, a proxy holding the connection open — hangs its await forever.
+ * Wrapping the call converts that silence into an error the UI can report and retry.
+ *
+ * @param {Promise} promise - The in-flight work
+ * @param {number} ms - Deadline in milliseconds
+ * @param {string} label - Operation name, used in the timeout message
+ * @returns {Promise} Resolves with the promise's value, or rejects on deadline
+ */
+export function withTimeout(promise, ms, label = 'Request') {
+	let timer;
+	const deadline = new Promise((_, reject) => {
+		timer = setTimeout(
+			() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)),
+			ms,
+		);
+	});
+	return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}

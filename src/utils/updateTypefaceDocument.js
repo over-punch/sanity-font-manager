@@ -1,6 +1,7 @@
 // Patches the parent typeface document's styles.fonts array with newly uploaded font references
 
 import { nanoid } from 'nanoid';
+import { withTimeout, TYPEFACE_PATCH_TIMEOUT_MS } from './planTypes';
 
 /**
  * Drops references whose font document no longer exists.
@@ -34,7 +35,11 @@ const fetchLiveFontIds = async (refArrays, client) => {
 	if (!ids.length) return new Set();
 
 	const draftIds = ids.map((id) => (id.startsWith('drafts.') ? id : `drafts.${id}`));
-	const found = await client.fetch(`*[_id in $ids || _id in $draftIds]._id`, { ids, draftIds });
+	const found = await withTimeout(
+		client.fetch(`*[_id in $ids || _id in $draftIds]._id`, { ids, draftIds }),
+		TYPEFACE_PATCH_TIMEOUT_MS,
+		'Stale-reference lookup',
+	);
 
 	// Report a draft hit under the published id, which is what the reference stores.
 	return new Set(
@@ -167,18 +172,56 @@ export const updateTypefaceDocument = async (
 	console.log('New preferred style: ', newPreferredStyle);
 	console.log('SubfamiliesArray:', subfamiliesArray);
 
+	// Size the mutation before sending it. An oversized payload is one of the few ways this commit
+	// can stall rather than fail, and the numbers are the first thing worth seeing in a bug report.
+	console.log('Typeface patch size:', describePatch(patch));
+
+	setStatus('Saving typeface document...');
+
 	try {
-		await client.patch(doc_id).set(patch).commit();
+		await withTimeout(
+			client.patch(doc_id).set(patch).commit(),
+			TYPEFACE_PATCH_TIMEOUT_MS,
+			'Typeface patch',
+		);
 		console.log(`Updated document: ${doc_id}`);
 
 		if (doc_id.startsWith('drafts.')) {
 			await updatePublishedDocument(doc_id, patch, client);
 		}
 	} catch (err) {
+		// Report through the callbacks the caller supplied, then rethrow. Swallowing here left
+		// executeUploadPlan's catch unreachable, so a failed patch surfaced as a successful run —
+		// and left UploadSummary's retry button reporting success without retrying anything.
 		console.error('Error updating document:', err.message);
 		setStatus('Error updating typeface');
 		setError(true);
+		throw err;
 	}
+};
+
+/**
+ * Summarises a typeface patch for logging — reference counts and serialised byte size.
+ * @param {Object} patch - The assembled patch object
+ * @returns {{fonts: number, variableFont: number, subfamilyRefs: number, bytes: number}}
+ */
+const describePatch = (patch) => {
+	const subfamilyRefs = (patch['styles.subfamilies'] || []).reduce(
+		(total, sf) => total + (sf.fonts?.length || 0),
+		0,
+	);
+	let bytes = 0;
+	try {
+		bytes = JSON.stringify(patch).length;
+	} catch {
+		bytes = -1;
+	}
+	return {
+		fonts: (patch['styles.fonts'] || []).length,
+		variableFont: (patch['styles.variableFont'] || []).length,
+		subfamilyRefs,
+		bytes,
+	};
 };
 
 /**
@@ -212,10 +255,18 @@ const updatePreferredStyle = async (doc_id, preferredStyleRef, newPreferredStyle
 const updatePublishedDocument = async (doc_id, patch, client) => {
 	const publishedId = doc_id.replace('drafts.', '');
 	// Parameterized to prevent injection from any draft ID edge cases
-	const publishedDoc = await client.fetch(`*[_id == $publishedId]`, { publishedId }).then(res => res[0]);
+	const publishedDoc = await withTimeout(
+		client.fetch(`*[_id == $publishedId]`, { publishedId }),
+		TYPEFACE_PATCH_TIMEOUT_MS,
+		'Published typeface lookup',
+	).then(res => res[0]);
 
 	if (publishedDoc) {
-		await client.patch(publishedId).set(patch).commit();
+		await withTimeout(
+			client.patch(publishedId).set(patch).commit(),
+			TYPEFACE_PATCH_TIMEOUT_MS,
+			'Published typeface patch',
+		);
 		console.log(`Updated published document: ${publishedId}`);
 	} else {
 		console.log(`No published document found for ${publishedId}, skipping`);

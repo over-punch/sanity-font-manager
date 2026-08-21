@@ -186,6 +186,13 @@ export async function executeUploadPlan({
 	// already uploaded, so a missing derived file is a warning, not a failed upload.
 	if (plan.settings?.webAndSubset) {
 		try {
+			// Announce the phase change before the first read. Without this the UI keeps showing
+			// 'Updating typeface document...' through several minutes of subset polling, which is
+			// indistinguishable from the patch itself having hung.
+			if (onProgress) {
+				onProgress({ type: 'web-subset-collecting' });
+			}
+
 			// Read back what actually landed rather than trusting the plan, and skip any font that
 			// already has both derived files.
 			const ids = [...result.fontRefs, ...result.variableRefs].map((r) => r._ref).filter(Boolean);
