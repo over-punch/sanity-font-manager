@@ -4,7 +4,8 @@ Last updated: 2026-08-15
 
 ## Recent state
 
-- **Unreleased — OpenType feature titles from the font.** `Detect OTF` now titles a stylistic set
+- **v2.18.0 — OpenType feature titles from the font.** Version bumped, **not yet published**, and
+  no Studio is on `^2.18.0` yet. `Detect OTF` now titles a stylistic set
   or character variant with the name the foundry put in the font (`ss01` → "Alternate g") instead
   of the canonical "Stylistic Set 1". `getFeatureUiNames` in `fontHelpers` reads each feature's
   FeatureParams — `UINameID` for ssXX, `featUiLabelNameId` for cvXX — resolves it through the name
