@@ -11,6 +11,7 @@ import {
 	getVariationAxes,
 	getNamedInstances,
 	getAllFeatureTags,
+	getFeatureUiNames,
 	getGlyphCount,
 	getCharacterSet,
 	getItalicAngle,
@@ -148,7 +149,7 @@ export async function buildUploadPlan({
 				// Object-wrapped to match the `font.opentypeFeatures` schema field, which is an object with a
 				// `chars` array. A bare array here reaches the document unchanged whenever metadata generation
 				// is skipped (no TTF/OTF), leaving every reader unable to find `.chars`.
-				opentypeFeatures: { chars: [] },
+				opentypeFeatures: { chars: [], featureList: [] },
 				variationAxes: null,
 			};
 
@@ -351,7 +352,7 @@ async function buildFontPlanEntry({
 		parsedMetadata: { ...metadata, ...metrics },
 		glyphCount: getGlyphCount(font),
 		// Must match the schema's object-with-chars shape — see the note on the error-path entry above.
-		opentypeFeatures: { chars: getAllFeatureTags(font) },
+		opentypeFeatures: { chars: getAllFeatureTags(font), featureList: getFeatureUiNames(font) },
 		variationAxes: axes,
 	};
 }

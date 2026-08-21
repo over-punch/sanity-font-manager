@@ -8,6 +8,7 @@ import {
 	getVariationAxes,
 	getNamedInstances,
 	getAllFeatureTags,
+	getFeatureUiNames,
 	getGlyphCount,
 	getCharacterSet,
 	getNameString,
@@ -97,6 +98,8 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 	console.log('Variable axes:', variableAxes);
 
 	const opentypeFeatures = getAllFeatureTags(font);
+	// The foundry's own names for the stylistic sets and character variants, where it supplied any.
+	const featureList = getFeatureUiNames(font);
 	const glyphCount = getGlyphCount(font);
 	const characterSet = getCharacterSet(font);
 
@@ -126,7 +129,7 @@ export default async function generateFontData({ fileInput, url, fontKit, fontId
 		variableAxes: JSON.stringify(variableAxes),
 		variableInstances: JSON.stringify(variableInstances),
 		glyphCount: glyphCount,
-		opentypeFeatures: { chars: opentypeFeatures },
+		opentypeFeatures: { chars: opentypeFeatures, featureList: featureList },
 		characterSet: { chars: characterSet },
 		...(cedarsPlus ? { cedarsPlus } : {}),
 	};

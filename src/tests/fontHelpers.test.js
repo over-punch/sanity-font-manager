@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	getNameString,
 	getAllFeatureTags,
+	getFeatureUiNames,
 	getCharacterSet,
 	getVariationAxes,
 	getNamedInstances,
@@ -16,7 +17,7 @@ import {
 	getFamilyClass,
 	escapeCssFontName,
 } from '../utils/fontHelpers';
-import { mockLibFont, mockVariableFont, mockBoldItalicFont } from './fixtures/mockLibFont';
+import { mockLibFont, mockVariableFont, mockBoldItalicFont, mockLayoutTable } from './fixtures/mockLibFont';
 
 // ---------------------------------------------------------------------------
 // getNameString
@@ -247,5 +248,102 @@ describe('escapeCssFontName', () => {
 
 	it('handles clean names without changes', () => {
 		expect(escapeCssFontName('Halyard Display Bold')).toBe('Halyard Display Bold');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// getAllFeatureTags
+// ---------------------------------------------------------------------------
+
+describe('getAllFeatureTags', () => {
+	it('returns an empty array when the font has no layout tables', () => {
+		expect(getAllFeatureTags(mockLibFont())).toEqual([]);
+	});
+
+	it('unions tags across GSUB and GPOS, deduplicated', () => {
+		const font = mockLibFont({
+			GSUB: mockLayoutTable([{ tag: 'liga' }, { tag: 'ss01' }]),
+			GPOS: mockLayoutTable([{ tag: 'kern' }, { tag: 'liga' }]),
+		});
+		expect(getAllFeatureTags(font).sort()).toEqual(['kern', 'liga', 'ss01']);
+	});
+
+	it('deduplicates the same feature repeated across scripts and languages', () => {
+		const font = mockLibFont({
+			GSUB: mockLayoutTable([{ tag: 'liga' }], { scripts: ['latn', 'cyrl'], langs: ['dflt', 'TRK '] }),
+		});
+		expect(getAllFeatureTags(font)).toEqual(['liga']);
+	});
+
+	it('survives a layout table that throws mid-traversal', () => {
+		const font = mockLibFont({
+			GSUB: { getSupportedScripts: () => { throw new Error('corrupt GSUB'); } },
+			GPOS: mockLayoutTable([{ tag: 'kern' }]),
+		});
+		expect(getAllFeatureTags(font)).toEqual(['kern']);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// getFeatureUiNames
+// ---------------------------------------------------------------------------
+
+describe('getFeatureUiNames', () => {
+	/** Font whose ss01/cv01 labels live at name IDs 256 and 257 */
+	const labelledFont = (features) => mockLibFont({
+		name: { 256: 'Alternate g', 257: 'Flat-topped 3' },
+		GSUB: mockLayoutTable(features),
+	});
+
+	it('returns an empty array when the font has no layout tables', () => {
+		expect(getFeatureUiNames(mockLibFont())).toEqual([]);
+	});
+
+	it('reads the stylistic set label from FeatureParams.UINameID', () => {
+		const font = labelledFont([{ tag: 'ss01', params: { version: 0, UINameID: 256 } }]);
+		expect(getFeatureUiNames(font)).toEqual([{ tag: 'ss01', title: 'Alternate g' }]);
+	});
+
+	it('reads the character variant label from FeatureParams.featUiLabelNameId', () => {
+		const font = labelledFont([{ tag: 'cv01', params: { format: 0, featUiLabelNameId: 257 } }]);
+		expect(getFeatureUiNames(font)).toEqual([{ tag: 'cv01', title: 'Flat-topped 3' }]);
+	});
+
+	it('sorts by tag so the stored list is stable across runs', () => {
+		const font = labelledFont([
+			{ tag: 'cv01', params: { featUiLabelNameId: 257 } },
+			{ tag: 'ss01', params: { UINameID: 256 } },
+		]);
+		expect(getFeatureUiNames(font).map((f) => f.tag)).toEqual(['cv01', 'ss01']);
+	});
+
+	it('ignores features that cannot carry a label', () => {
+		// 'liga' has no FeatureParams in the spec; a mock that offers one must still be skipped.
+		const font = labelledFont([{ tag: 'liga', params: { UINameID: 256 } }]);
+		expect(getFeatureUiNames(font)).toEqual([]);
+	});
+
+	it('ignores a set with no FeatureParams', () => {
+		const font = labelledFont([{ tag: 'ss02', params: undefined }]);
+		expect(getFeatureUiNames(font)).toEqual([]);
+	});
+
+	it('rejects reserved name IDs below 256', () => {
+		// nameID 0 is the copyright string — honouring it would title ss01 'Copyright 2024 Test Foundry'.
+		const font = labelledFont([{ tag: 'ss01', params: { UINameID: 0 } }]);
+		expect(getFeatureUiNames(font)).toEqual([]);
+	});
+
+	it('omits a set whose name record is missing rather than titling it blank', () => {
+		const font = labelledFont([{ tag: 'ss03', params: { UINameID: 999 } }]);
+		expect(getFeatureUiNames(font)).toEqual([]);
+	});
+
+	it('keeps the other labels when one set throws on FeatureParams', () => {
+		const font = labelledFont([
+			{ tag: 'ss01', throws: true },
+			{ tag: 'cv01', params: { featUiLabelNameId: 257 } },
+		]);
+		expect(getFeatureUiNames(font)).toEqual([{ tag: 'cv01', title: 'Flat-topped 3' }]);
 	});
 });

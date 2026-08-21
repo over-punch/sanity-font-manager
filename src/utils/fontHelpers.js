@@ -40,15 +40,32 @@ export function getNameString(font, nameID) {
 }
 
 /**
- * Get all OpenType feature tags from GSUB and GPOS tables.
- * Traverses scripts → langsys → features, deduplicates, and caches.
- * Equivalent to fontkit's font.availableFeatures.
+ * Tags whose FeatureParams can carry a foundry-authored UI label — stylistic sets (ss01–ss20) and
+ * character variants (cv01–cv99). No other feature tag has a name in the OpenType spec.
+ * @type {RegExp}
+ */
+const UI_LABELLED_TAG = /^(ss|cv)\d\d$/;
+
+/**
+ * Lowest name table ID a feature label may use. IDs 0–255 are reserved for the standard records
+ * (copyright, family, subfamily…), so FeatureParams pointing below this is a malformed font rather
+ * than a label — honouring it would title a stylistic set with the font's copyright string.
+ * @type {number}
+ */
+const FIRST_CUSTOM_NAME_ID = 256;
+
+/**
+ * Walks every feature table in GSUB and GPOS, calling `visit` with the table and its trimmed tag.
+ *
+ * Shared by `getAllFeatureTags` and `getFeatureUiNames` so the scripts → langsys → features
+ * traversal and its per-table error handling exist once. Fonts repeat the same feature across
+ * scripts and languages, so `visit` sees most tags many times over — callers deduplicate.
  *
  * @param {object} font - lib-font Font instance
- * @returns {string[]} Array of unique 4-character feature tag strings (e.g. ['kern', 'liga', 'smcp'])
+ * @param {(feature: object, tag: string) => void} visit - called for every feature table found
+ * @returns {void}
  */
-export function getAllFeatureTags(font) {
-	const tags = new Set();
+function eachFeatureTable(font, visit) {
 	const tables = font.opentype?.tables;
 	for (const layoutTable of [tables?.GSUB, tables?.GPOS]) {
 		if (!layoutTable) continue;
@@ -58,7 +75,8 @@ export function getAllFeatureTags(font) {
 				for (const langTag of layoutTable.getSupportedLangSys(script)) {
 					const langsys = layoutTable.getLangSysTable(script, langTag);
 					for (const feature of layoutTable.getFeatures(langsys)) {
-						tags.add(feature.featureTag.trim());
+						if (!feature?.featureTag) continue;
+						visit(feature, feature.featureTag.trim());
 					}
 				}
 			}
@@ -66,7 +84,84 @@ export function getAllFeatureTags(font) {
 			console.warn(`Error reading ${layoutTable === tables.GSUB ? 'GSUB' : 'GPOS'} features:`, err.message);
 		}
 	}
+}
+
+/**
+ * Get all OpenType feature tags from GSUB and GPOS tables.
+ * Traverses scripts → langsys → features, deduplicates, and caches.
+ * Equivalent to fontkit's font.availableFeatures.
+ *
+ * @param {object} font - lib-font Font instance
+ * @returns {string[]} Array of unique 4-character feature tag strings (e.g. ['kern', 'liga', 'smcp'])
+ */
+export function getAllFeatureTags(font) {
+	const tags = new Set();
+	eachFeatureTable(font, (_feature, tag) => {
+		if (tag) tags.add(tag);
+	});
 	return [...tags];
+}
+
+/**
+ * Reads the foundry-authored UI labels for the font's stylistic sets and character variants.
+ *
+ * These are the only features a type designer gets to name: `ss01` might be "Alternate g" in one
+ * family and "Flat-topped 3" in the next, so the generic "Stylistic Set 1" is the wrong label
+ * whenever the font ships a real one. The label lives in the feature's FeatureParams as a name
+ * table ID, which lib-font resolves through `getFeatureParams()`.
+ *
+ * Unnamed features are omitted rather than returned with an empty title, so callers can fall back
+ * to their own canonical titles without having to filter blanks first.
+ *
+ * @param {object} font - lib-font Font instance
+ * @returns {{tag: string, title: string}[]} labelled features sorted by tag, ready for the
+ *   `font.opentypeFeatures.featureList` field, e.g. [{ tag: 'ss01', title: 'Alternate g' }]
+ */
+export function getFeatureUiNames(font) {
+	const names = new Map();
+
+	eachFeatureTable(font, (feature, tag) => {
+		// The same tag recurs across scripts and languages — the first label found wins.
+		if (!UI_LABELLED_TAG.test(tag) || names.has(tag)) return;
+
+		const nameID = readUiLabelNameId(feature, tag);
+		if (!nameID) return;
+
+		const title = getNameString(font, nameID).trim();
+		if (title) names.set(tag, title);
+	});
+
+	return [...names.entries()]
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([tag, title]) => ({ tag, title }));
+}
+
+/**
+ * Resolves a feature table's UI label name ID, or 0 when it has none.
+ *
+ * `getFeatureParams()` re-reads the font at a stored offset, so a malformed table throws here
+ * instead of returning null — caught per feature, because one bad stylistic set must not cost us
+ * the labels on all the others.
+ *
+ * @param {object} feature - lib-font FeatureTable
+ * @param {string} tag - the feature's trimmed 4-character tag, already known to be ssXX or cvXX
+ * @returns {number} name table ID in the custom range (256+), or 0 when unavailable
+ */
+function readUiLabelNameId(feature, tag) {
+	if (typeof feature.getFeatureParams !== 'function') return 0;
+
+	let params;
+	try {
+		params = feature.getFeatureParams();
+	} catch (err) {
+		console.warn(`Error reading FeatureParams for ${tag}:`, err.message);
+		return 0;
+	}
+	if (!params) return 0;
+
+	// Stylistic sets expose the label as `UINameID`; character variants call it `featUiLabelNameId`.
+	const nameID = tag.startsWith('ss') ? params.UINameID : params.featUiLabelNameId;
+	return Number.isInteger(nameID) && nameID >= FIRST_CUSTOM_NAME_ID ? nameID : 0;
 }
 
 /**

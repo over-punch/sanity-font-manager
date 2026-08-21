@@ -7,9 +7,13 @@ import { useSanityClient } from '../hooks/useSanityClient';
 import { detectOpenTypeFeatures } from '../utils/detectOpenTypeFeatures';
 
 /**
- * Reads every linked font's stored `opentypeFeatures.chars`, unions the tags across the family, and
+ * Reads every linked font's stored `opentypeFeatures`, unions the tags across the family, and
  * patches the field with each supported feature — both the `features` checkbox array and the
  * per-feature sub-objects carrying their canonical `feature` tag.
+ *
+ * Stylistic sets and character variants are titled with the foundry's own name where the font
+ * supplied one, falling back to the canonical "Stylistic Set 1" wording. Titles an editor typed
+ * are left alone.
  */
 export const SetOTF = (props) => {
 	const { onChange, value = {} } = props;
@@ -52,7 +56,7 @@ export const SetOTF = (props) => {
 				return;
 			}
 
-			const { features, detected, fontsWithData } = detectOpenTypeFeatures(fontDocs, value);
+			const { features, detected, fontsWithData, namedFeatures } = detectOpenTypeFeatures(fontDocs, value);
 
 			if (!fontsWithData) {
 				flashMessage(`Error: No OpenType feature data found in any of the ${fontDocs.length} linked styles. Generate font data first.`);
@@ -62,7 +66,8 @@ export const SetOTF = (props) => {
 			onChange(set({ ...value, ...detected, features }));
 			flashMessage(
 				features.length
-					? `Detected ${features.length} features across ${fontsWithData} of ${ids.length} styles.`
+					? `Detected ${features.length} features across ${fontsWithData} of ${ids.length} styles`
+						+ (namedFeatures ? `, ${namedFeatures} named by the font.` : '.')
 					: `No supported features found across ${fontsWithData} of ${ids.length} styles.`
 			);
 		} catch (err) {

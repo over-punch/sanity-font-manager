@@ -134,3 +134,80 @@ describe('detectOpenTypeFeatures', () => {
 		expect(features).not.toEqual(expect.arrayContaining(['smallCaps', 'petiteCaps', 'swash', 'allCaps']));
 	});
 });
+
+describe('font-supplied feature titles', () => {
+	/** Builds a font document carrying both feature tags and the foundry's labels for them */
+	const named = (id, chars, featureList) => ({ _id: id, opentypeFeatures: { chars, featureList } });
+
+	it('titles a stylistic set with the name the font supplies', () => {
+		const docs = [named('roman', ['ss01'], [{ tag: 'ss01', title: 'Alternate g' }])];
+		const { detected, namedFeatures } = detectOpenTypeFeatures(docs, {});
+		expect(detected.stylisticSet1.title).toBe('Alternate g');
+		expect(namedFeatures).toBe(1);
+	});
+
+	it('falls back to the canonical title when the font names nothing', () => {
+		const { detected, namedFeatures } = detectOpenTypeFeatures([named('roman', ['ss01'], [])], {});
+		expect(detected.stylisticSet1.title).toBe('Stylistic Set 1');
+		expect(namedFeatures).toBe(0);
+	});
+
+	it('replaces a previously auto-filled canonical title', () => {
+		// The old behaviour wrote 'Stylistic Set 1' into the document, and the value spread made it
+		// permanent — a font label could never land on a typeface that had been detected before.
+		const docs = [named('roman', ['ss01'], [{ tag: 'ss01', title: 'Alternate g' }])];
+		const value = { stylisticSet1: { title: 'Stylistic Set 1', feature: 'ss01' } };
+		expect(detectOpenTypeFeatures(docs, value).detected.stylisticSet1.title).toBe('Alternate g');
+	});
+
+	it('never overwrites a title an editor typed', () => {
+		const docs = [named('roman', ['ss01'], [{ tag: 'ss01', title: 'Alternate g' }])];
+		const value = { stylisticSet1: { title: 'Single-storey g', feature: 'ss01' } };
+		const { detected, namedFeatures } = detectOpenTypeFeatures(docs, value);
+		expect(detected.stylisticSet1.title).toBe('Single-storey g');
+		expect(namedFeatures).toBe(0);
+	});
+
+	it('preserves sibling fields while retitling', () => {
+		const docs = [named('roman', ['ss01'], [{ tag: 'ss01', title: 'Alternate g' }])];
+		const value = { stylisticSet1: { title: 'Stylistic Set 1', customText: 'agile', feature: 'xxxx' } };
+		const { detected } = detectOpenTypeFeatures(docs, value);
+		expect(detected.stylisticSet1).toEqual({
+			title: 'Alternate g',
+			customText: 'agile',
+			feature: 'ss01',
+		});
+	});
+
+	it('takes the first style that names a tag when styles disagree', () => {
+		const docs = [
+			named('roman', ['ss01'], [{ tag: 'ss01', title: 'Alternate g' }]),
+			named('italic', ['ss01'], [{ tag: 'ss01', title: 'Swash g' }]),
+		];
+		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('Alternate g');
+	});
+
+	it('leaves multi-tag features on their canonical title', () => {
+		// 'pnum onum' is our grouping of two tags — the font never labels the combination.
+		const docs = [named('roman', ['pnum', 'onum'], [{ tag: 'pnum', title: 'Not a real label' }])];
+		expect(detectOpenTypeFeatures(docs, {}).detected.proportionalOldstyle.title).toBe('Proportional Oldstyle');
+	});
+
+	it('ignores malformed featureList entries', () => {
+		const docs = [named('roman', ['ss01'], [null, { tag: 'ss01' }, { title: 'orphan' }, { tag: '  ', title: 'x' }])];
+		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('Stylistic Set 1');
+	});
+
+	it('handles documents written before featureList existed', () => {
+		const legacy = [{ _id: 'roman', opentypeFeatures: { chars: ['ss01'] } }];
+		expect(detectOpenTypeFeatures(legacy, {}).detected.stylisticSet1.title).toBe('Stylistic Set 1');
+	});
+
+	it('prefers the draft style\'s labels over the published copy', () => {
+		const docs = [
+			named('roman', ['ss01'], [{ tag: 'ss01', title: 'Old name' }]),
+			named('drafts.roman', ['ss01'], [{ tag: 'ss01', title: 'New name' }]),
+		];
+		expect(detectOpenTypeFeatures(docs, {}).detected.stylisticSet1.title).toBe('New name');
+	});
+});
