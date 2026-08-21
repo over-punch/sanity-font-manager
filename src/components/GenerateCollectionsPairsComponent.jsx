@@ -29,8 +29,35 @@ export const GenerateCollectionsPairsComponent = () => {
 	const slug = useFormValue(['slug']);
 	const stylesObject = useFormValue(['styles']);
 
+	/** Returns VFs whose variableInstanceReferences are fully covered by a given set of static font IDs. */
+	const getIncludedVFs = useCallback((collectionFontIds, variableFonts) => {
+		if (!variableFonts || variableFonts.length === 0) return [];
+
+		const collectionIdSet = new Set(collectionFontIds);
+		const included = [];
+
+		for (const vf of variableFonts) {
+			// Skip VFs without variableInstanceReferences (data not curated yet)
+			if (!vf.variableInstanceReferences || Object.keys(vf.variableInstanceReferences).length === 0) continue;
+
+			// Check if ALL referenced static fonts are in this collection
+			const refIds = Object.values(vf.variableInstanceReferences)
+				.map(ref => ref?._ref)
+				.filter(Boolean);
+
+			if (refIds.length === 0) continue;
+
+			const allCovered = refIds.every(id => collectionIdSet.has(id));
+			if (allCovered) {
+				included.push(vf);
+			}
+		}
+
+		return included;
+	}, []);
+
 	/** Creates or replaces a collection document and returns a weak reference to it. */
-	const createSanityCollection = useCallback(async (fontsList, collectionSlug, newTitle) => {
+	const createSanityCollection = useCallback(async (fontsList, collectionSlug, newTitle, variableFonts) => {
 		const newSlug = collectionSlug.toLowerCase().trim();
 
 		const fontRefs = fontsList.map(font => ({
@@ -52,7 +79,7 @@ export const GenerateCollectionsPairsComponent = () => {
 
 		const price = (collectionPrice ? Number(collectionPrice) : 0) * fontRefs.length;
 
-		await client.createOrReplace({
+		const collectionDoc = {
 			_key: nanoid(),
 			_id: newSlug,
 			_type: 'collection',
@@ -63,10 +90,27 @@ export const GenerateCollectionsPairsComponent = () => {
 			slug: { _type: 'slug', current: newSlug },
 			fonts: fontRefs,
 			price,
-		}).catch(err => { console.error('Error creating collection:', err.message); });
+		};
+
+		// Auto-detect VFs whose instance references are fully covered by this collection
+		if (variableFonts && variableFonts.length > 0) {
+			const collectionFontIds = fontsList.map(f => f._id ?? f._ref);
+			const includedVFs = getIncludedVFs(collectionFontIds, variableFonts);
+			if (includedVFs.length > 0) {
+				collectionDoc.includedItems = includedVFs.map(vf => ({
+					_key: nanoid(),
+					_type: 'reference',
+					_ref: vf._id,
+					_weak: true,
+				}));
+			}
+		}
+
+		await client.createOrReplace(collectionDoc)
+			.catch(err => { console.error('Error creating collection:', err.message); });
 
 		return { _ref: newSlug, _type: 'reference', _weak: true, _key: nanoid() };
-	}, [collectionPrice, client]);
+	}, [collectionPrice, client, getIncludedVFs]);
 
 	/** Creates or replaces a pair document and returns a weak reference to it. */
 	const createSanityPair = useCallback(async (pair, pairSlug, newTitle) => {
@@ -99,10 +143,14 @@ export const GenerateCollectionsPairsComponent = () => {
 		setReady(false);
 		try {
 			const result = await client.fetch(
-				`*[_type == "typeface" && _id == $id]{ "fonts": styles.fonts[] -> }[0]`,
+				`*[_type == "typeface" && _id == $id]{
+					"fonts": styles.fonts[] ->,
+					"variableFonts": styles.variableFont[] -> { _id, variableInstanceReferences }
+				}[0]`,
 				{ id: doc_id }
 			);
 			const sanityFonts = result?.fonts ?? [];
+			const variableFonts = result?.variableFonts ?? [];
 
 			const subfamilies = stylesObject?.subfamilies ?? [];
 			const totalCollections = subfamilies.length + 3;
@@ -118,16 +166,16 @@ export const GenerateCollectionsPairsComponent = () => {
 
 			if (fullFamily.length > 1) {
 				setStatus(`[1/${totalCollections}] Generating full family collection`);
-				typefacePatch.push(await createSanityCollection(fullFamily, `${slug.current}-full-family`, `${title} Full Family`));
+				typefacePatch.push(await createSanityCollection(fullFamily, `${slug.current}-full-family`, `${title} Full Family`, variableFonts));
 			}
 			if (uprights.length > 1) {
 				setStatus(`[2/${totalCollections}] Generating uprights collection`);
-				const ref = await createSanityCollection(uprights, `${slug.current}-uprights`, `${title} Uprights`);
+				const ref = await createSanityCollection(uprights, `${slug.current}-uprights`, `${title} Uprights`, variableFonts);
 				if (ref) typefacePatch.push(ref);
 			}
 			if (italics.length > 1) {
 				setStatus(`[3/${totalCollections}] Generating italics collection`);
-				const ref = await createSanityCollection(italics, `${slug.current}-italics`, `${title} Italics`);
+				const ref = await createSanityCollection(italics, `${slug.current}-italics`, `${title} Italics`, variableFonts);
 				if (ref) typefacePatch.push(ref);
 			}
 			for (let i = 0; i < subfamilies.length; i++) {
@@ -135,7 +183,8 @@ export const GenerateCollectionsPairsComponent = () => {
 				const ref = await createSanityCollection(
 					subfamilies[i].fonts,
 					`${slug.current}-${slugify(subfamilies[i].title)}-family`,
-					`${title} ${subfamilies[i].title} Family`
+					`${title} ${subfamilies[i].title} Family`,
+					variableFonts
 				);
 				if (ref) typefacePatch.push(ref);
 			}
