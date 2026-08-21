@@ -2,13 +2,42 @@
 
 [![npm version](https://img.shields.io/npm/v/@liiift-studio/sanity-font-manager.svg)](https://www.npmjs.com/package/@liiift-studio/sanity-font-manager)
 [![license](https://img.shields.io/npm/l/@liiift-studio/sanity-font-manager.svg)](#license)
-[![Sanity v3 · v4 · v5](https://img.shields.io/badge/Sanity-v3%20%C2%B7%20v4%20%C2%B7%20v5-f03e2f.svg)](https://www.sanity.io/)
+[![Sanity v3 · v4 · v5 · v6](https://img.shields.io/badge/Sanity-v3%20%C2%B7%20v4%20%C2%B7%20v5%20%C2%B7%20v6-f03e2f.svg)](https://www.sanity.io/)
 
 Full font management suite for Sanity Studio. Handles batch upload, multi-format conversion, metadata extraction, CSS `@font-face` generation, collection and pair generation, and script variant management.
 
 Drag a folder of font files onto a typeface document and the plugin parses each file, detects its weight and style, checks for an existing document, then — after you review and confirm — uploads every format, generates the `@font-face` CSS and metadata, creates or updates the font documents, and maps any variable-font instances.
 
-Compatible with Sanity v3, v4, and v5.
+Compatible with Sanity Studio **v3 through v6** (`sanity` peer: `>=3 <7`).
+
+<details>
+<summary>How one build spans four majors</summary>
+
+`@sanity/ui` v4 relocated `Tooltip`, `Menu`, `MenuButton`, `MenuItem`, `Code`, `Popover`,
+`Autocomplete` and `useToast` to subpath entry points, and `@sanity/icons` v5 removed every
+named `*Icon` export in favour of `<Icon symbol="…">`. Both packages still *declare* the
+removed names in their `.d.ts`, typed `never` — so a plain named import type-checks, builds,
+and then fails at runtime. The subpaths do not exist on v2 or v3, so neither import shape
+works across the whole range.
+
+This plugin therefore imports no `@sanity/ui` or `@sanity/icons` symbol directly. Everything
+goes through [`@liiift-studio/sanity-ui-compat`](https://www.npmjs.com/package/@liiift-studio/sanity-ui-compat),
+which reads the installed namespace at runtime and resolves each export against whichever
+major is actually present. It also translates the props v4 renamed (`Stack`/`Inline` `space`
+→ `gap`, `Grid` `columns` → `gridTemplateColumns`, `Badge` `mode` removed), which are ignored
+silently rather than warned about.
+
+**Note the `@sanity/ui` peer is `>=2 <5`, which is correct for Sanity v6** — Studio v6 ships
+`@sanity/ui` v4, not v5.
+
+**Verification status, stated plainly:** v6 support is established by the peer ranges, a
+green build, and the 431-test suite passing with the compat in place. It has **not** yet been
+exercised in a running Sanity 6 Studio. On v3 and v4 the compat is a measured pass-through —
+16 of 18 primitives resolve to the identical `@sanity/ui` object and `Stack`/`Grid` render
+byte-identical markup — so the risk is concentrated in v6-specific fallback paths (tooltip
+placement, menu focus handling), not in the majors already in production.
+
+</details>
 
 ## How it works
 
@@ -60,10 +89,10 @@ npm install sanity @sanity/ui @sanity/icons react @liiift-studio/sanity-advanced
 
 | Peer | Required version | Notes |
 |---|---|---|
-| `sanity` | `>=3` | |
-| `@sanity/ui` | `>=3` | |
-| `@sanity/icons` | `>=3` | |
-| `react` | `>=18` | |
+| `sanity` | `>=3 <7` | Studio v3, v4, v5 and v6 |
+| `@sanity/ui` | `>=2 <5` | **`<5` is correct for Sanity v6** — Studio v6 ships `@sanity/ui` v4 |
+| `@sanity/icons` | `>=2 <6` | v5 dropped the named `*Icon` exports; resolved at runtime instead |
+| `react` | `>=18` | Sanity v5+ requires React 19.2.2 or newer |
 | `@liiift-studio/sanity-advanced-reference-array` | `>=1` | **Required for the [Quickstart](#quickstart) path.** `createStylesField` and the typeface reference-array fields import it at module load, so importing them without it installed will throw. You only need it if you wire fields the manual way and skip both. |
 
 If you hit peer dependency conflicts, add `legacy-peer-deps=true` to your `.npmrc`.
