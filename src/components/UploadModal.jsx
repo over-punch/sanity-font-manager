@@ -56,6 +56,12 @@ export default function UploadModal({
 		sell: defaults.sell !== false,
 		// Opt-in per studio — see generateWebAndSubset.js for the two prerequisites.
 		webAndSubset: defaults.webAndSubset === true,
+		// executeUploadPlan reads plan.settings.requireSubset, but this line was missing, so it
+		// was permanently undefined and every run treated the web copy as the finish line —
+		// never waiting for woff2_subset even on the studios whose fontWorker writes it.
+		// Still defaults to false: requiring a file an absent fontWorker never writes stalls
+		// every run until the poll times out.
+		requireSubset: defaults.requireSubset === true,
 		siteUrl: defaults.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
 		preserveShortenedNames: defaults.preserveShortenedNames ?? false,
 		preserveFileNames: defaults.preserveFileNames ?? false,

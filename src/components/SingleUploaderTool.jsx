@@ -1,7 +1,7 @@
 // Per-font file manager — TTF/OTF/WOFF/WOFF2/CSS rows always visible; EOT/SVG/WEB/SUBSET/DATA behind an advanced toggle
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Button, Grid, Stack, Flex, Box, Text, Card } from '@liiift-studio/sanity-ui-compat';
+import { Button, Grid, Stack, Flex, Box, Text, Card, Switch } from '@liiift-studio/sanity-ui-compat';
 import { TrashIcon, ControlsIcon } from '@liiift-studio/sanity-ui-compat/icons';
 import { useFormValue, set, unset } from 'sanity';
 import { parseFont } from '../utils/parseFont';
@@ -38,6 +38,16 @@ export const SingleUploaderTool = (props) => {
 	const [error, setError] = useState(false);
 	const [filenames, setFilenames] = useState({});
 	const [showAdvanced, setShowAdvanced] = useState(false);
+	/**
+	 * Opt out of deriving the web copy and display subset from an uploaded WOFF2.
+	 *
+	 * Deriving is the default because the derived files are what the site actually
+	 * serves, and a font uploaded without them renders from the full-weight WOFF2.
+	 * This exists for the deliberate case — swapping the purchase-delivery WOFF2 while
+	 * leaving an already-approved web copy and subset untouched. Deliberately NOT
+	 * persisted: it resets on remount so it cannot silently stay on for later uploads.
+	 */
+	const [skipDerived, setSkipDerived] = useState(false);
 
 	const fileInput = useFormValue(['fileInput']);
 	const doc_id = useFormValue(['_id']);
@@ -156,6 +166,60 @@ export const SingleUploaderTool = (props) => {
 		return null;
 	}, [client, doc_id]);
 
+	/**
+	 * Builds the DS-WEB web copy and the display subset from the stored WOFF2.
+	 *
+	 * Shared by both WOFF2 paths so they cannot drift. They previously did: building a
+	 * WOFF2 from a TTF derived both files, while uploading a WOFF2 directly built only
+	 * the CSS and silently skipped them — the same font ending up in two different
+	 * states depending on which button produced it. Two batches had already shipped
+	 * without web copies (Daith's 82 and Omnes' 2) before that was noticed, because the
+	 * manual WEB/SUBSET buttons live behind the Advanced toggle and are easy to miss.
+	 *
+	 * Skipped entirely when `skipDerived` is set — the deliberate escape hatch for
+	 * replacing a WOFF2 without disturbing an already-approved web copy or subset.
+	 *
+	 * @returns {Promise<'built'|'skipped'|'pending'|'no-source'>} 'pending' means the
+	 *   request was sent but the files had not landed before the poll gave up; the
+	 *   caller should stop and leave the error message on screen.
+	 */
+	const deriveWebAndSubset = useCallback(async () => {
+		if (skipDerived) {
+			setMessage('WEB + SUBSET skipped (advanced)');
+			return 'skipped';
+		}
+
+		const woff2Url = await waitForWoff2();
+		if (!woff2Url) return 'no-source';
+
+		setStatus('Building WEB + SUBSET');
+		setMessage('Building WEB + SUBSET files...');
+
+		const summary = await generateWebAndSubset({
+			client,
+			siteUrl: process.env.SANITY_STUDIO_SITE_URL,
+			fonts: [{
+				_id: doc_id,
+				woff2Url,
+				filename: doc_slug?.current,
+				title: doc_title,
+				variableFont: doc_variableFont,
+				style: doc_style,
+				weight: doc_weight,
+			}],
+		});
+
+		if (summary?.pending?.length) {
+			setMessage('WEB + SUBSET did not finish — use the Advanced panel to retry');
+			setError(true);
+			setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 5000);
+			return 'pending';
+		}
+
+		setMessage('WEB + SUBSET built');
+		return 'built';
+	}, [skipDerived, waitForWoff2, client, doc_id, doc_slug, doc_title, doc_variableFont, doc_style, doc_weight]);
+
 	const handleGenerateFontFile = useCallback(async (code, sourceFile) => {
 		const isMissing = Array.isArray(code);
 		const label = code === 'all' ? 'all font files' : isMissing ? 'missing files' : code + ' file';
@@ -183,37 +247,10 @@ export const SingleUploaderTool = (props) => {
 			setMessage('Files built');
 			setStatus('Files built successfully');
 
-			// Chain the DS-WEB copy and display subset whenever a WOFF2 was produced. fontWorker
-			// attempts both inline during generate-fonts, but two uploads have now landed without
-			// them (Daith's 82 and Omnes' 2), and the manual WEB/SUBSET buttons sit behind the
-			// Advanced toggle where they are easy to miss. Requesting them explicitly — and verifying
-			// they land — makes the single-font path match what the batch uploader already does.
+			// Chain the DS-WEB copy and display subset whenever a WOFF2 was produced.
 			if (codes.includes('woff2')) {
-				const woff2Url = await waitForWoff2();
-				if (woff2Url) {
-					setStatus('Building WEB + SUBSET');
-					setMessage('Building WEB + SUBSET files...');
-					const summary = await generateWebAndSubset({
-						client,
-						siteUrl: process.env.SANITY_STUDIO_SITE_URL,
-						fonts: [{
-							_id: doc_id,
-							woff2Url,
-							filename: doc_slug?.current,
-							title: doc_title,
-							variableFont: doc_variableFont,
-							style: doc_style,
-							weight: doc_weight,
-						}],
-					});
-					if (summary?.pending?.length) {
-						setMessage('WEB + SUBSET did not finish — use the Advanced panel to retry');
-						setError(true);
-						setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 5000);
-						return;
-					}
-					setMessage('WEB + SUBSET built');
-				}
+				const derived = await deriveWebAndSubset();
+				if (derived === 'pending') return;
 			}
 
 			setTimeout(() => { setMessage(''); setStatus('ready'); }, 2000);
@@ -403,6 +440,16 @@ export const SingleUploaderTool = (props) => {
 				});
 				setMessage(doc_title + '.css built');
 				setStatus('CSS file built successfully');
+
+				// Derive the web copy and subset here too. Uploading a WOFF2 directly used to
+				// stop at the CSS, so the same font ended up in a different state depending on
+				// whether its WOFF2 was uploaded or built from a TTF. The site serves the
+				// derived files, so skipping them silently ships the full-weight WOFF2 to
+				// visitors. Commit the asset ref first — deriveWebAndSubset polls Sanity for
+				// the stored WOFF2 and would otherwise race its own upload.
+				onChange(set(newFileInput));
+				const derived = await deriveWebAndSubset();
+				if (derived === 'pending') return;
 			}
 
 			if (code === 'ttf') {
@@ -425,7 +472,7 @@ export const SingleUploaderTool = (props) => {
 			setError(true);
 			setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 3000);
 		}
-	}, [fileInput, onChange, doc_title, doc_typefaceName, doc_variableFont, doc_weight, doc_slug, doc_id, client, weightKeywordList, italicKeywordList]);
+	}, [fileInput, onChange, doc_title, doc_typefaceName, doc_variableFont, doc_weight, doc_slug, doc_id, client, weightKeywordList, italicKeywordList, deriveWebAndSubset]);
 
 	/** Deletes a single fileInput font file asset. */
 	const handleDelete = useCallback(async (code) => {
@@ -724,6 +771,34 @@ export const SingleUploaderTool = (props) => {
 			{showAdvanced && renderFontSection('svg', 'ttf')}
 			{renderCssSection()}
 			{showAdvanced && renderDataSection()}
+
+			{/*
+			  * Escape hatch for replacing a WOFF2 without disturbing derived files. Lives behind
+			  * Advanced because deriving is the correct default — the site serves woff2_web and
+			  * woff2_subset, so a WOFF2 uploaded without them silently ships the full-weight file
+			  * to visitors.
+			  */}
+			{showAdvanced && (
+				<Card padding={3} radius={2} tone={skipDerived ? 'caution' : 'transparent'} border>
+					<Flex align="flex-start" gap={3}>
+						<Switch
+							id="skip-derived"
+							checked={skipDerived}
+							onChange={(e) => setSkipDerived(e.currentTarget.checked)}
+						/>
+						<Stack space={2} flex={1}>
+							<Text size={1} weight="semibold" as="label" htmlFor="skip-derived">
+								Upload WOFF2 without rebuilding WEB + SUBSET
+							</Text>
+							<Text size={1} muted>
+								{skipDerived
+									? 'On — an uploaded WOFF2 will replace the purchase-delivery file only. The existing WEB and SUBSET files are left exactly as they are.'
+									: 'Off — uploading a WOFF2 also rebuilds the fingerprinted WEB copy and the display SUBSET, which are the files the site actually serves.'}
+							</Text>
+						</Stack>
+					</Flex>
+				</Card>
+			)}
 
 			{status === 'ready' && (fileInput?.ttf || fileInput?.otf || fileInput?.woff || fileInput?.woff2) && (
 				<Button mode="ghost" tone="critical" onClick={() => handleDeleteAll()} text="Delete All" style={{ width: '100%' }} />
