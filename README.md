@@ -3,10 +3,21 @@
 [![npm version](https://img.shields.io/npm/v/@liiift-studio/sanity-font-manager.svg)](https://www.npmjs.com/package/@liiift-studio/sanity-font-manager)
 [![license](https://img.shields.io/npm/l/@liiift-studio/sanity-font-manager.svg)](#license)
 [![Sanity v3 · v4 · v5 · v6](https://img.shields.io/badge/Sanity-v3%20%C2%B7%20v4%20%C2%B7%20v5%20%C2%B7%20v6-f03e2f.svg)](https://www.sanity.io/)
+[![tests](https://img.shields.io/badge/tests-440%20passing-brightgreen.svg)](#testing)
 
 Full font management suite for Sanity Studio. Handles batch upload, multi-format conversion, metadata extraction, CSS `@font-face` generation, collection and pair generation, and script variant management.
 
 Drag a folder of font files onto a typeface document and the plugin parses each file, detects its weight and style, checks for an existing document, then — after you review and confirm — uploads every format, generates the `@font-face` CSS and metadata, creates or updates the font documents, and maps any variable-font instances.
+
+### What it gives you, and what you provide
+
+|  | |
+|---|---|
+| **The plugin provides** | The upload UI and its multi-step wizard, font parsing (`lib-font`, no native binaries), `@font-face` CSS + metadata generation, duplicate resolution, and ready-made schema field factories (`createStylesField`, `createFontFileFields`, `openTypeField`, …). |
+| **Your studio provides** | The `typeface` and `font` **document types** themselves, plus the three `SANITY_STUDIO_*` env vars. The [Quickstart](#quickstart) below wires both documents end to end. |
+| **Your site optionally provides** | A `POST /api/sanity/fontWorker` route — needed **only** for EOT/SVG conversion and DS-WEB/subset WOFF2s. TTF/OTF/WOFF/WOFF2 upload, parsing, CSS, and metadata all work without it. |
+
+There is **no `plugins: []` entry to add to `sanity.config.js`** — this package ships input components and schema fields, and is wired up entirely from your schema definitions.
 
 Compatible with Sanity Studio **v3 through v6** (`sanity` peer: `>=3 <7`).
 
@@ -31,17 +42,27 @@ silently rather than warned about.
 `@sanity/ui` v4, not v5.
 
 **Verification status, stated plainly:** v6 support is established by the peer ranges, a
-green build, and the 431-test suite passing with the compat in place. It has **not** yet been
-exercised in a running Sanity 6 Studio. On v3 and v4 the compat is a measured pass-through —
+green build, and the [test suite](#testing) (440 passing) going green with the compat in place.
+It has **not** yet been exercised in a running Sanity 6 Studio beyond three in-house studios.
+On v3 and v4 the compat is a measured pass-through —
 16 of 18 primitives resolve to the identical `@sanity/ui` object and `Stack`/`Grid` render
 byte-identical markup — so the risk is concentrated in v6-specific fallback paths (tooltip
 placement, menu focus handling), not in the majors already in production.
 
 </details>
 
+### Contents
+
+**Get it running** — [Installation](#installation) · [Quickstart](#quickstart) · [Environment variables](#environment-variables)
+**Understand it** — [How it works](#how-it-works) · [Upload workflow](#upload-workflow) *(start here if you curate fonts rather than write schemas)* · [Safety & reliability](#safety--reliability)
+**Reference** — [Components](#components) · [Schema field definitions](#schema-field-definitions) · [Hooks](#hook) · [Utilities](#utilities) · [Document shapes](#schema-fields)
+**Maintain it** — [Testing](#testing) · [Local development](#local-development)
+
 ## How it works
 
 The upload flow is a two-phase **plan → execute** pipeline: phase 1 parses files and resolves duplicates with **reads only**, you review and edit the result, then phase 2 performs all **writes**. Font parsing runs on [`lib-font`](https://github.com/Pomax/lib-font) (WOFF/WOFF2 decompression is bootstrapped via `pako` + a vendored `unbrotli`), so no native binaries are required.
+
+A third phase — building the derived web copies and display subsets — runs after the typeface patch **only if the studio opts in**, and can never fail the upload. It is drawn below because a stall in it used to look identical to a stall in the typeface patch; see [Web copies and display subsets](#web-copies-and-display-subsets-opt-in).
 
 ```mermaid
 flowchart TD
@@ -66,10 +87,23 @@ flowchart TD
         CSS --> META["generateFontData()<br/>metadata · metrics · glyphs · features"]
         META --> DOC["Create / update font documents"]
         DOC --> PATCH["Patch typeface styles.fonts"]
-        PATCH --> S3b["Step 3b · Map Instances<br/>UploadStep3bInstances (variable fonts)"]
-        S3b --> SUM["Summary<br/>UploadSummary"]
     end
+
+    S3b["Step 3b · Map Instances<br/>UploadStep3bInstances (variable fonts)"] --> SUM["Summary<br/>UploadSummary"]
+
+    subgraph derive["Phase 3 — Derived web files (opt-in · never fails the upload)"]
+        GATE{"settings.webAndSubset"}
+        GATE -->|on| COLL["collectFontsForGeneration()<br/>skips fonts already complete<br/>60s query deadline"]
+        COLL --> REQ["requestWebAndSubset()<br/>POST /api/sanity/fontWorker · no-cors<br/>4 at a time · 60s AbortController"]
+        REQ --> VER["verifyWebAndSubset()<br/>poll Sanity every 4s, up to 180s<br/>requireSubset ? web + subset : web only"]
+    end
+
+    PATCH --> GATE
+    GATE -->|off| S3b
+    VER -->|"warns, never throws"| S3b
 ```
+
+Every phase boundary in that diagram logs its elapsed milliseconds to the browser console (`Upload phase: …`), so when a run is slow you can tell *which* phase is slow — and a phase that is hung rather than slow shows as a boundary that never prints. Paste the console output into a bug report and the phase is already narrowed down.
 
 > The Mermaid source lives at [`assets/upload-pipeline.mmd`](assets/upload-pipeline.mmd) and renders inline on GitHub. **A maintainer screenshot or short GIF of the live upload modal** (drag → review table → execute → instance mapping) would make the workflow even clearer — these Studio components cannot be captured headlessly, so it is left as a follow-up. Drop the image into `assets/` and reference it with an absolute `raw.githubusercontent.com` URL.
 
@@ -108,6 +142,10 @@ npm install lib-font pako
 ---
 
 ## Quickstart
+
+Two document types, then three env vars. Nothing to register in `sanity.config.js`.
+
+### 1 · The typeface document
 
 Wire `BatchUploadFonts` onto the `styles` field of a typeface document and you get the full drag-and-drop upload modal. The fastest way to build the rest of the `styles` object is the `createStylesField` factory, which assembles the fonts/variable-font/collections/pairs reference arrays for you.
 
@@ -152,6 +190,53 @@ export const typeface = {
   ],
 };
 ```
+
+### 2 · The font document
+
+The uploader **creates and patches `font` documents**, so that type has to exist before the first upload — this is the step most often missed. The per-format file set is the same at every foundry, so it ships as a factory: `createFontFileFields()` builds the whole `fileInput` object (TTF/OTF/WOFF/WOFF2/EOT/SVG/CSS, plus the two derived WOFF2s) and wires `SingleUploaderTool` into it.
+
+```jsx
+// schemas/font.js
+import { createFontFileFields, SingleUploaderTool } from '@liiift-studio/sanity-font-manager';
+
+export const font = {
+  name: 'font',
+  type: 'document',
+  fields: [
+    // Written by the uploader from the parsed font — the review step edits these.
+    { name: 'title', type: 'string' },
+    { name: 'slug', type: 'slug', options: { source: 'title' } },
+    { name: 'typefaceName', type: 'string' },
+    { name: 'weightName', type: 'string' },
+    { name: 'weight', type: 'number' },
+    { name: 'style', type: 'string' },        // 'Regular' | 'Italic'
+    { name: 'subfamily', type: 'string' },
+    { name: 'variableFont', type: 'boolean' },
+    { name: 'normalWeight', type: 'boolean' },
+
+    // The whole per-format file set, with the per-font file manager as its input.
+    // `derived: false` omits woff2_web / woff2_subset if your site has no subset-capable worker.
+    createFontFileFields({ input: SingleUploaderTool }),
+  ],
+};
+```
+
+Patched automatically by `generateFontData` after upload: `metaData`, `metrics`, `glyphCount`, `opentypeFeatures`, `characterSet`, and the variable-font axes/instances. Sanity accepts those patches whether or not you declare the fields, but an undeclared field shows in the Studio as an *unknown field* — declare the ones you want editors to see, using [Font document (`font`)](#font-document-font) as the contract.
+
+Register both types in your schema:
+
+```js
+// sanity.config.js — schema types only; this package needs no `plugins` entry.
+import { typeface } from './schemas/typeface';
+import { font } from './schemas/font';
+
+export default defineConfig({
+  /* … */
+  schema: { types: [typeface, font] },
+});
+```
+
+### 3 · Environment, then run it
 
 Then set the required environment variables in your studio (`SANITY_STUDIO_SITE_URL`, `SANITY_STUDIO_PROJECT_ID`, `SANITY_STUDIO_DATASET` — see [Environment variables](#environment-variables)). Multi-format conversion and subsetting additionally need a `/api/sanity/fontWorker` endpoint on the consuming site (see [`generateFontFile`](#css-and-file-generation) / [`generateSubset`](#css-and-file-generation)); TTF/OTF/WOFF/WOFF2 upload, parsing, CSS, and metadata work without it.
 
@@ -200,19 +285,58 @@ Switch it on per studio:
 **Two prerequisites, both required.** Leave it off unless the studio has each:
 
 1. The `font` schema defines `fileInput.woff2_web` and `fileInput.woff2_subset`.
+   `createFontFileFields()` emits both by default — see [`createFontFileFields`](#createfontfilefields).
 2. The site implements `POST /api/sanity/fontWorker` handling `code: 'generate-subset'`. One call
-   produces *both* files and patches them onto the font document.
+   is expected to produce *both* files and patch them onto the font document — but see
+   **`requireSubset`** below: as of 2.21.0 the plugin no longer assumes the subset actually lands.
 
 Behaviour, in `utils/generateWebAndSubset.js`:
 
 - Runs after the fonts and the typeface document are written, so nothing above it can be affected.
-- Reads back what actually landed and **skips any font that already has both files**, so re-running a
+- Reads back what actually landed and **skips any font that is already complete**, so re-running a
   partial upload only fills the gaps. Pass `force` to rebuild regardless.
 - Requests are throttled (4 at a time) — the worker does real subsetting per font.
 - The Studio and site are different origins, so the POST is `no-cors` and its response is opaque.
-  Success is therefore confirmed by **polling Sanity** until both fields appear, not by the fetch.
+  Success is therefore confirmed by **polling Sanity** until the expected fields appear, not by the
+  fetch.
 - **Never fails the upload.** The fonts are already saved; a missing derived file is reported as a
   warning via `result.webAndSubset` (`{ requested, skipped, done, pending }`).
+
+#### What counts as done — `requireSubset` (2.21.0)
+
+Until 2.21.0 this phase waited for **both** `woff2_web` and `woff2_subset`. Subsetting is newer than
+the web copy, and a `fontWorker` that writes only the web copy makes that predicate unsatisfiable:
+every upload polled for the full timeout and then reported the whole batch pending — which the UI
+rendered as the *typeface patch* still running. It looked exactly like a freeze.
+
+The finish line is now the **web copy alone** unless the studio states otherwise:
+
+| `requireSubset` | Confirms a font when | Use when |
+|---|---|---|
+| `false` *(default)* | `fileInput.woff2_web` is present | Your `fontWorker` writes the web copy, and the subset is best-effort or not implemented |
+| `true` | **both** `woff2_web` and `woff2_subset` are present | You have verified your worker writes subsets |
+
+The same predicate decides what still needs work on the way in, so with the old behaviour a partial
+worker also re-ran server-side subsetting on every upload for fonts that had already finished.
+
+> `requireSubset` is read from `plan.settings.requireSubset` by `executeUploadPlan`. It is **not yet
+> forwarded from the field's `options.defaults`** — today it is reachable only when driving
+> `executeUploadPlan` with a plan you built yourself. Studios using `BatchUploadFonts` get the
+> default (`false`), which is the correct setting for every current consumer.
+
+#### Timeouts, and reading the console
+
+Every network step in this phase is bounded, because none of them can be trusted to answer:
+
+| Step | Bound | Notes |
+|---|---|---|
+| `collectFontsForGeneration` — the "what still needs work" query | **60s** | Untimed until 2.20.1; it sat exactly where the UI goes quiet after the patch |
+| `requestWebAndSubset` — each `fontWorker` POST | **60s** `AbortController` | The response is `no-cors`/opaque and is *never* the success signal, so aborting is safe: it does not cancel the server-side subsetting, and the poll still picks up whatever lands |
+| `verifyWebAndSubset` — the confirmation poll | **180s**, polling every **4s** | Logs each confirmation, plus a heartbeat every fifth empty poll |
+
+All of it narrates itself to the browser console with elapsed milliseconds — `Web/subset: …` per step
+and `Upload phase: …` at each phase boundary. If a run ever stalls again, the last line printed names
+the phase.
 
 To backfill fonts uploaded before this existed, call `generateWebAndSubset` directly, or use the
 consuming site's own backfill script if it has one.
@@ -285,7 +409,17 @@ npm test          # vitest run
 npm run test:watch
 ```
 
+**440 tests across 25 files, green in under 3 seconds** as of 2.21.0 (35 further tests are skipped — environment-gated cases, not failures). It runs with no Sanity project, no network, and no fixtures to download, so it is a reasonable first thing to run when evaluating the package:
+
+```
+ Test Files  24 passed | 1 skipped (25)
+      Tests  440 passed | 35 skipped (475)
+   Duration  2.74s
+```
+
 The `build` script (`npm run build`) runs the test suite before bundling with `tsup`, so a broken test blocks publish. (The suite — like the runtime — requires `lib-font` and `pako` in `node_modules`; see [Parsing dependencies](#parsing-dependencies).)
+
+The suite is also where regressions get pinned: the batch-upload hang fixed in 2.20.1–2.21.0 (see [`requireSubset`](#what-counts-as-done--requiresubset-2210)) is held down by cases in `generateWebAndSubset.test.js` covering the request timeout, the confirmation predicate, and the skip-already-complete path.
 
 ---
 
@@ -552,6 +686,28 @@ import { createStylesField, BatchUploadFonts } from '@liiift-studio/sanity-font-
 
 > Uses `@liiift-studio/sanity-advanced-reference-array` (a peer dependency — see [Peer dependencies](#peer-dependencies)) for the typeface-scoped reference pickers.
 
+### `createFontFileFields`
+
+Factory that builds the **font** document's `fileInput` object — the per-format file set every foundry stores. Hand-copying it into each studio's schema let the shape drift, which matters because the uploader patches these exact paths. Spread the result into your `font` document's `fields` array (see [Quickstart](#quickstart)).
+
+```js
+import { createFontFileFields, SingleUploaderTool } from '@liiift-studio/sanity-font-manager';
+
+createFontFileFields({ input: SingleUploaderTool, group: 'files' }),
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `name` | `'fileInput'` | Field name. |
+| `title` | `'Files'` | Field title. |
+| `group` | *(omitted)* | Studio field group; left off the field entirely when not given. |
+| `description` | a default help string | Help text under the field. Pass `null` to omit it. |
+| `input` | *(none)* | Input component — normally [`SingleUploaderTool`](#singleuploadertool). |
+| `derived` | `true` | Include `woff2_subset` and `woff2_web`. Set `false` when the site has no subset-capable `fontWorker`, so editors aren't shown fields nothing will ever fill. |
+| `formats` | *(all)* | Override the delivery format list, e.g. `['ttf', 'woff2', 'css']`. Validate against the exported `FONT_FILE_FORMATS`. |
+
+Emits `ttf` (with an `.ttf` accept filter, since it is the source everything else converts from), `otf`, `woff`, `woff2`, `eot`, `svg`, `css`, plus `woff2_subset` and `woff2_web` when `derived` is on. `FONT_FILE_FORMATS` is exported alongside it as the list of names the factory can emit.
+
 ### `openTypeField`
 
 A complete `openType` object field wired to the `openType` tab group. Includes the `features` checkbox array (all standard OpenType feature keys) plus per-feature sub-objects with `title`, `feature`, and `customText` fields. Uses `SetOTF` internally for auto-detection.
@@ -690,6 +846,10 @@ Parsing runs on [`lib-font`](https://github.com/Pomax/lib-font). `parseFont` is 
 | `buildFontMetadata` | Pure function — extracts `metaData` and `metrics` from a `lib-font` parsed font without any Sanity side effects |
 | `generateFontFile` | Fires a POST to the consuming site's `/api/sanity/fontWorker` endpoint with the format codes to convert (otf, woff, woff2, eot, svg, data) |
 | `generateSubset` | Requests DS-WEB fingerprinted WOFF2 and display subset generation from an existing WOFF2 via fontWorker |
+| `generateWebAndSubset` | The opt-in post-upload phase — collects the fonts still needing derived files, fans the requests out 4 at a time, then confirms by polling. Never throws; returns `{ requested, skipped, done, pending }`. See [Web copies and display subsets](#web-copies-and-display-subsets-opt-in) |
+| `collectFontsForGeneration` | Reads back which fonts still need derived files (`{ client, ids, force, requireSubset }`), skipping those already complete. 60s query deadline |
+| `requestWebAndSubset` | A single `no-cors` `fontWorker` POST for one font, bounded by a 60s `AbortController` |
+| `verifyWebAndSubset` | Polls Sanity every 4s (up to 180s) until the expected derived fields land; `requireSubset` selects web-only vs web + subset |
 | `parseVariableFontInstances` | Resolves named variable font instances into Sanity font document references, creating documents for missing instances |
 | `getEmptyFontKit` | Returns a zeroed-out placeholder font object used when no font binary is available |
 

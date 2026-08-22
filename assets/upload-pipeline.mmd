@@ -24,9 +24,20 @@ flowchart TD
         CSS --> META["generateFontData()<br/>metadata · metrics · glyphs · features"]
         META --> DOC["Create / update font documents"]
         DOC --> PATCH["Patch typeface styles.fonts"]
-        PATCH --> S3b["Step 3b · Map Instances<br/>UploadStep3bInstances (variable fonts)"]
-        S3b --> SUM["Summary<br/>UploadSummary"]
     end
+
+    S3b["Step 3b · Map Instances<br/>UploadStep3bInstances (variable fonts)"] --> SUM["Summary<br/>UploadSummary"]
+
+    subgraph derive["Phase 3 — Derived web files (opt-in · never fails the upload)"]
+        GATE{"settings.webAndSubset"}
+        GATE -->|on| COLL["collectFontsForGeneration()<br/>skips fonts already complete<br/>60s query deadline"]
+        COLL --> REQ["requestWebAndSubset()<br/>POST /api/sanity/fontWorker · no-cors<br/>4 at a time · 60s AbortController"]
+        REQ --> VER["verifyWebAndSubset()<br/>poll Sanity every 4s, up to 180s<br/>requireSubset ? web + subset : web only"]
+    end
+
+    PATCH --> GATE
+    GATE -->|off| S3b
+    VER -->|"warns, never throws"| S3b
 
     planReducer["planReducer (state machine)"] -.drives.-> plan
     executionReducer["executionReducer (progress)"] -.drives.-> execute
