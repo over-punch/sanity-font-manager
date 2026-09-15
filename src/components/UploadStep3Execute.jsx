@@ -94,6 +94,12 @@ export default function UploadStep3Execute({
 					execDispatch({ type: 'SET_EXECUTION_STATUS', status: 'generating-web-subset' });
 				} else if (event.type === 'web-subset-progress') {
 					setSubsetProgress({ done: event.done ?? 0, total: event.total ?? 0 });
+				} else if (event.type === 'trial-collecting' || event.type === 'trial-start') {
+					// Trials run after web/subset; clear its count so the new phase starts from zero.
+					setSubsetProgress(null);
+					execDispatch({ type: 'SET_EXECUTION_STATUS', status: 'generating-trials' });
+				} else if (event.type === 'trial-progress') {
+					setSubsetProgress({ done: event.done ?? 0, total: event.total ?? 0 });
 				}
 			},
 		}).then((executionResult) => {
@@ -162,6 +168,10 @@ export default function UploadStep3Execute({
 									? (subsetProgress?.total
 										? `Generating web copies and subsets (${subsetProgress.done} of ${subsetProgress.total})...`
 										: 'Generating web copies and subsets...')
+									: execState.status === 'generating-trials'
+										? (subsetProgress?.total
+											? `Generating trial fonts (${subsetProgress.done} of ${subsetProgress.total})...`
+											: 'Generating trial fonts...')
 									: execState.status === 'complete'
 										? 'Upload complete'
 										: execState.status === 'error'

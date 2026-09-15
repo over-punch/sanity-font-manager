@@ -1,4 +1,5 @@
-// Factory for the font document's `fileInput` object — the per-format file set every foundry shares
+// Factory for the font document's `fileInput` object — the per-format file set every foundry shares, plus the env-gated trial file
+import { getTrialConfig } from '../utils/trialFonts.js';
 
 /**
  * Delivery formats in the order they are shown in the Studio. `ttf` carries an accept filter
@@ -31,6 +32,25 @@ const DERIVED_FORMATS = [
 	},
 ];
 
+/**
+ * Builds the trial download field. The site's fontWorker writes the Unicode range and label the
+ * file was built with alongside the asset, which is how the Studio tells a current trial from one
+ * made under an older setting.
+ * @param {object} config - from getTrialConfig
+ * @returns {object} format definition
+ */
+function trialFormat(config) {
+	return {
+		name: 'trial',
+		title: 'Trial file',
+		description: `Auto-generated ${config.label} trial for download: the OTF — or the TTF when there is no OTF — subset to ${config.unicodeRange || 'the trial Unicode range'} and renamed "<Family> ${config.label}", keeping the source's extension. Rebuilt on upload.`,
+		fields: [
+			{ name: 'unicodeRange', title: 'Unicode range', type: 'string', readOnly: true },
+			{ name: 'label', title: 'Label', type: 'string', readOnly: true },
+		],
+	};
+}
+
 /** Default help text shown under the field in the Studio */
 const DEFAULT_DESCRIPTION = "This section is meant for fine tuning. It is recommended to batch upload your pre-built files in their respective Typeface page. EOT/SVG are rarely needed and can cost $$ to store so we don't generate them by default.";
 
@@ -48,6 +68,9 @@ const DEFAULT_DESCRIPTION = "This section is meant for fine tuning. It is recomm
  * @param {object} [options.input] - Input component, normally SingleUploaderTool
  * @param {boolean} [options.derived] - Include woff2_subset and woff2_web. Requires a
  *   subset-capable /api/sanity/fontWorker on the consuming site
+ * @param {boolean} [options.trial] - Include the trial download file. Defaults to on when the studio
+ *   sets SANITY_STUDIO_TRIAL_UNICODE_RANGE and `derived` is on, so script variants stay without one.
+ *   Requires a fontWorker handling `generate-trial`
  * @param {string[]} [options.formats] - Override the delivery format list
  * @returns {object} Sanity object field definition
  */
@@ -58,18 +81,27 @@ export function createFontFileFields({
 	description = DEFAULT_DESCRIPTION,
 	input,
 	derived = true,
+	trial,
 	formats,
 } = {}) {
 	const selected = formats
 		? BASE_FORMATS.filter(f => formats.includes(f.name))
 		: BASE_FORMATS;
 
-	const fields = [...selected, ...(derived ? DERIVED_FORMATS : [])].map(format => ({
+	const trialConfig = getTrialConfig();
+	const includeTrial = trial ?? (derived && trialConfig.enabled);
+
+	const fields = [
+		...selected,
+		...(derived ? DERIVED_FORMATS : []),
+		...(includeTrial ? [trialFormat(trialConfig)] : []),
+	].map(format => ({
 		title: format.title,
 		name: format.name,
 		type: 'file',
 		...(format.options ? { options: format.options } : {}),
 		...(format.description ? { description: format.description } : {}),
+		...(format.fields ? { fields: format.fields } : {}),
 	}));
 
 	const field = {
@@ -90,4 +122,5 @@ export function createFontFileFields({
 export const FONT_FILE_FORMATS = [
 	...BASE_FORMATS.map(f => f.name),
 	...DERIVED_FORMATS.map(f => f.name),
+	'trial',
 ];

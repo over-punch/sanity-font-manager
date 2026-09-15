@@ -6,6 +6,7 @@ import generateFontData from './generateFontData';
 import { parseVariableFontInstances } from './parseVariableFontInstances';
 import { updateTypefaceDocument } from './updateTypefaceDocument';
 import { generateWebAndSubset, collectFontsForGeneration } from './generateWebAndSubset';
+import { generateTrialFonts, collectFontsForTrial, selectFontsWithNewSource, getTrialConfig } from './trialFonts';
 import {
 	FONT_STATUS,
 	EXECUTION_STATUS,
@@ -90,6 +91,9 @@ export async function executeUploadPlan({
 	let newPreferredStyle = { weight: -100, style: 'Italic', _ref: '' };
 	const subfamilies = {};
 	const uniqueSubfamilies = new Set();
+	// Font document id -> file formats uploaded for it in this run. The trial phase uses it to rebuild
+	// only trials whose source file (OTF, or TTF with no OTF) actually changed.
+	const uploadedFormats = new Map();
 
 	for (const chunk of chunks) {
 		const chunkResults = await Promise.allSettled(
@@ -122,6 +126,12 @@ export async function executeUploadPlan({
 				} else {
 					result.fontRefs.push(fontResult.ref);
 				}
+
+				// Track which formats this font received, for the trial phase
+				uploadedFormats.set(
+					fontResult.ref._ref,
+					new Set(entry.files.map((file) => determineFileType(file)).filter(Boolean))
+				);
 
 				subfamilies[entry.documentId] = entry.subfamily;
 				if (entry.subfamily) uniqueSubfamilies.add(entry.subfamily);
@@ -228,6 +238,46 @@ export async function executeUploadPlan({
 		} catch (err) {
 			console.warn(`Web/subset generation failed after ${Date.now() - subsetStart}ms:`, err.message);
 			result.webAndSubset = { error: err.message };
+		}
+	}
+
+	// Rebuild trial (DEMO) fonts when the studio sets SANITY_STUDIO_TRIAL_UNICODE_RANGE — but only for
+	// fonts whose trial source was uploaded in this run: an OTF, or a TTF for a font with no OTF. Those
+	// are forced, because a new source makes the stored trial out of date even though its range and
+	// label still match. A batch of web formats alone never touches trials. Never fails the run.
+	const desktopIds = [...result.fontRefs, ...result.variableRefs]
+		.map((r) => r._ref)
+		.filter((id) => id && (uploadedFormats.get(id)?.has('otf') || uploadedFormats.get(id)?.has('ttf')));
+
+	if (plan.settings?.trialFonts && !desktopIds.length) {
+		console.log('Upload phase: no OTF or TTF uploaded — trial fonts left unchanged');
+	}
+
+	if (plan.settings?.trialFonts && desktopIds.length) {
+		const trialStart = Date.now();
+		try {
+			if (onProgress) {
+				onProgress({ type: 'trial-collecting' });
+			}
+
+			const config = getTrialConfig();
+			const candidates = await collectFontsForTrial({ client, ids: desktopIds, config, force: true });
+			// A TTF uploaded to a font that has an OTF is not its trial source, so it is dropped here.
+			const fonts = selectFontsWithNewSource(candidates, uploadedFormats);
+			console.log(`Upload phase: ${fonts.length} of ${candidates.length} fonts had their trial source uploaded`);
+
+			const summary = await generateTrialFonts({
+				client,
+				siteUrl: plan.settings.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
+				fonts,
+				config,
+				onProgress: (p) => { if (onProgress) onProgress(p); },
+			});
+			result.trialFonts = summary;
+			console.log(`Upload phase: trial fonts finished in ${Date.now() - trialStart}ms`, summary);
+		} catch (err) {
+			console.warn(`Trial font generation failed after ${Date.now() - trialStart}ms:`, err.message);
+			result.trialFonts = { error: err.message };
 		}
 	}
 

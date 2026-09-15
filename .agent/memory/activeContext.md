@@ -1,8 +1,30 @@
 # Active Context — @liiift-studio/sanity-font-manager
 
-Last updated: 2026-08-21
+Last updated: 2026-09-15
 
 ## Recent state
+
+- **2.23.0 (branch `feature/trial-fonts`, not yet published) — env-gated trial (DEMO) fonts.** Asked for
+  by TDF, built cross-foundry: everything keys off `SANITY_STUDIO_TRIAL_UNICODE_RANGE`, and a studio
+  that leaves it unset gets no field, no row and no requests. Optional `SANITY_STUDIO_TRIAL_LABEL`
+  (default `DEMO`).
+  - `utils/trialFonts.js` — config/normalising, `generate-trial` request, collect, verify, generate.
+    Mirrors `generateWebAndSubset` (4 at a time, no-cors, AbortController, Sanity poll) with two
+    differences: requests get 90s (Pyodide cold start on the site), and verification waits for a
+    **different asset ref**, so a forced rebuild is never confirmed by the trial it replaces.
+  - A trial keeps its source's extension: cut from the OTF it is `.otf`, from a TTF-only font `.ttf`
+    (matters for variable fonts). The request's `sourceFormat` carries this to the worker.
+  - `fileInput.trial` is a `file` with `unicodeRange` + `label` sub-fields written by the worker. That
+    is the staleness signal: change the env range and every existing trial reads as stale.
+  - Wiring: `createFontFileFields` (trial defaults to `derived && enabled`, so script variants never get
+    one), `executeUploadPlan` trial phase after web/subset (only fonts whose trial source — the OTF, or the TTF when there is no
+    OTF — was uploaded in the run, via `selectFontsWithNewSource`; web-only uploads never rebuild),
+    `UploadStep3Execute` status, `SingleUploaderTool` TRIAL row + rebuild on OTF upload/build or TTF
+    upload with no OTF, `BatchUploadFonts` Utilities → Generate Trial Fonts (+ rebuild-current switch).
+  - The site does the build. TDF's reference is `lib/buildTrialFont.js` (subset + rename in one
+    fontTools pass under Pyodide) and `scripts/generate-trial-fonts.js` for the dataset backfill.
+  - Tests: `trialFonts.test.js` (new) and `fontFileFields.test.js`. The component files are not
+    covered by tests.
 
 - **`fix/batch-upload-hang` — the typeface patch could hang the uploader forever.** Reported by
   MCKL: the batch uploader sits on "Updating typeface document..." with every font asset and

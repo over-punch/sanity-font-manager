@@ -341,6 +341,50 @@ the phase.
 To backfill fonts uploaded before this existed, call `generateWebAndSubset` directly, or use the
 consuming site's own backfill script if it has one.
 
+### Trial fonts (env-gated)
+
+Set `SANITY_STUDIO_TRIAL_UNICODE_RANGE` and every font gets a downloadable trial: its OTF — or its
+TTF when there is no OTF — subset to that range and renamed so it cannot collide with a licensed
+install. For a font "Romek Bold" that is family `Romek DEMO`, full name `Romek DEMO Bold`, PostScript
+name `RomekDEMO-Bold`, file `DEMO_Romek-Bold.otf`. A trial keeps its source's extension, so one cut
+from a TTF-only font is `DEMO_Romek-Bold.ttf` — which matters for variable fonts shipped as TTF.
+**Leave it unset and nothing changes** — no field,
+no row, no requests — so other foundries carry no cost.
+
+```env
+# Printable ASCII: A–Z, a–z, 0–9, space and punctuation
+SANITY_STUDIO_TRIAL_UNICODE_RANGE=U+0020-007E
+# Optional. Letters and digits only; defaults to DEMO
+SANITY_STUDIO_TRIAL_LABEL=DEMO
+```
+
+With the range set:
+
+- `createFontFileFields()` adds `fileInput.trial`, a file field that also stores the `unicodeRange` and
+  `label` it was built with. Script variants (`derived: false`) do not get one.
+- **Batch upload** rebuilds trials once the web/subset phase finishes ("Generating trial fonts…"), but
+  only for fonts whose trial source was in the upload: an OTF, or a TTF for a font with no OTF. A batch
+  of only web formats, or a TTF for a font that already has an OTF, leaves the trial alone; fill any
+  missing trials with Generate Trial Fonts. Turn it off for one uploader with
+  `options.defaults.trialFonts: false`.
+- **`SingleUploaderTool`** shows a **TRIAL** row (Build / Upload / Delete) and rebuilds the trial when an
+  OTF is uploaded or built, or when a TTF is uploaded to a font that has no OTF.
+- The typeface **Utilities** panel gains **Generate Trial Fonts**, which fills in missing and *stale*
+  trials, with a switch to rebuild current ones too. A trial is stale when its stored range or label no
+  longer matches the env — so changing the range makes every existing trial eligible again.
+
+The site does the actual build: implement `code: 'generate-trial'` on the fontWorker (see
+[the contract](#the-fontworker-endpoint-multi-format-conversion--subsetting)). Fetch `srcUrl`, subset
+it to `unicodes`, rename it with `label`, upload it with `sourceFormat` (`otf` or `ttf`) as its extension, and set `fileInput.trial` to
+`{ _type: 'file', asset, unicodeRange: unicodes, label }`. Store `unicodes` and `label` exactly as
+received, since that is what the Studio compares against.
+
+Requests and verification follow the web/subset pattern, in `utils/trialFonts.js`: 4 fonts at a time,
+90s per request (the first trial on a cold function also starts the subsetter), then a Sanity poll of
+up to 180s that waits for a **new** asset, so a rebuild is never confirmed by the trial it replaces.
+TDF's `lib/buildTrialFont.js` (fontTools under Pyodide) is a working reference, and its
+`scripts/generate-trial-fonts.js` backfills an entire dataset locally.
+
 ### Prerequisites the consumer provides
 
 This plugin supplies the upload UI, parsing, and field factories — it writes to `font` and `typeface` document types that **your studio defines**. Use the [Schema fields](#schema-fields) tables below as the contract for the document shapes the uploaders read and patch (the `font` document's `fileInput`/`metaData`/`metrics` objects, the `typeface` document's `styles.fonts`/`styles.variableFont` arrays). `createStylesField` builds the `styles` object for you; the surrounding `typeface` and `font` document types are yours to declare.
@@ -354,6 +398,14 @@ TTF/OTF/WOFF/WOFF2 upload, parsing, CSS, and metadata all work with no extra inf
 ```
 
 (plus `documentTitle`, `documentVariableFont`, `documentStyle`, `documentWeight`, `fileInput`, `language`). The endpoint URL is derived from `SANITY_STUDIO_SITE_URL`. The request is fire-and-forget (`mode: 'no-cors'`), so the worker writes the converted assets back to the Sanity document itself.
+
+[Trial fonts](#trial-fonts-env-gated) send their own body, and are only sent when `SANITY_STUDIO_TRIAL_UNICODE_RANGE` is set:
+
+```jsonc
+{ "code": "generate-trial", "srcUrl": "https://cdn.sanity.io/…/romek-bold.otf", "sourceFormat": "otf", "documentId": "romek-bold", "documentTitle": "Romek Bold", "unicodes": "U+0020-007E", "label": "DEMO" }
+```
+
+`unicodes` is always the canonical form (comma-separated `U+XXXX` / `U+XXXX-YYYY`, upper-case, no spaces). The worker writes `fileInput.trial` with `unicodeRange` and `label` copied from the request.
 
 ---
 
@@ -704,9 +756,10 @@ createFontFileFields({ input: SingleUploaderTool, group: 'files' }),
 | `description` | a default help string | Help text under the field. Pass `null` to omit it. |
 | `input` | *(none)* | Input component — normally [`SingleUploaderTool`](#singleuploadertool). |
 | `derived` | `true` | Include `woff2_subset` and `woff2_web`. Set `false` when the site has no subset-capable `fontWorker`, so editors aren't shown fields nothing will ever fill. |
+| `trial` | on when `SANITY_STUDIO_TRIAL_UNICODE_RANGE` is set and `derived` is on | Include the `trial` download file (with its `unicodeRange` / `label` sub-fields). See [Trial fonts](#trial-fonts-env-gated). |
 | `formats` | *(all)* | Override the delivery format list, e.g. `['ttf', 'woff2', 'css']`. Validate against the exported `FONT_FILE_FORMATS`. |
 
-Emits `ttf` (with an `.ttf` accept filter, since it is the source everything else converts from), `otf`, `woff`, `woff2`, `eot`, `svg`, `css`, plus `woff2_subset` and `woff2_web` when `derived` is on. `FONT_FILE_FORMATS` is exported alongside it as the list of names the factory can emit.
+Emits `ttf` (with an `.ttf` accept filter, since it is the source everything else converts from), `otf`, `woff`, `woff2`, `eot`, `svg`, `css`, plus `woff2_subset` and `woff2_web` when `derived` is on, plus `trial` when trial fonts are configured. `FONT_FILE_FORMATS` is exported alongside it as the list of names the factory can emit.
 
 ### `openTypeField`
 
@@ -899,6 +952,7 @@ Parsing runs on [`lib-font`](https://github.com/Pomax/lib-font). `parseFont` is 
 | `fileInput.css` | `file` | Generated `@font-face` CSS file |
 | `fileInput.woff2_web` | `file` | DS-WEB fingerprinted WOFF2 for web delivery |
 | `fileInput.woff2_subset` | `file` | Display subset WOFF2 (Latin + Latin-1, fingerprinted) |
+| `fileInput.trial` | `file` | Trial (DEMO) OTF, only when `SANITY_STUDIO_TRIAL_UNICODE_RANGE` is set. Sub-fields `unicodeRange` and `label` record what it was built with |
 | `metaData` | `object` | Font metadata — `postscriptName`, `fullName`, `familyName`, `subfamilyName`, `copyright`, `version`, `genDate` |
 | `metrics` | `object` | Font metrics — `unitsPerEm`, `ascender`, `descender`, `lineGap`, `capHeight`, `xHeight`, `italicAngle`, etc. |
 | `glyphCount` | `number` | Total number of glyphs |
@@ -929,6 +983,8 @@ Parsing runs on [`lib-font`](https://github.com/Pomax/lib-font). `parseFont` is 
 | `SANITY_STUDIO_SCRIPTS` | No | Comma-separated script variant names (e.g. `latin,greek,arabic`). Controls which script tabs appear. |
 | `SANITY_STUDIO_DEFAULT_COLLECTION_PRICE` | No | Default per-font price for generated collections. |
 | `SANITY_STUDIO_DEFAULT_PAIR_PRICE` | No | Default price for generated pairs. |
+| `SANITY_STUDIO_TRIAL_UNICODE_RANGE` | No | Turns on [trial fonts](#trial-fonts-env-gated) and sets what they contain, e.g. `U+0020-007E`. Unset: no trial field, row or requests. |
+| `SANITY_STUDIO_TRIAL_LABEL` | No | Trial label for family and file names; letters and digits only. Defaults to `DEMO`. |
 
 ---
 
