@@ -12,6 +12,8 @@ Last updated: 2026-09-15
     Mirrors `generateWebAndSubset` (4 at a time, no-cors, AbortController, Sanity poll) with two
     differences: requests get 90s (Pyodide cold start on the site), and verification waits for a
     **different asset ref**, so a forced rebuild is never confirmed by the trial it replaces.
+  - A trial keeps its source's extension: cut from the OTF it is `.otf`, from a TTF-only font `.ttf`
+    (matters for variable fonts). The request's `sourceFormat` carries this to the worker.
   - `fileInput.trial` is a `file` with `unicodeRange` + `label` sub-fields written by the worker. That
     is the staleness signal: change the env range and every existing trial reads as stale.
   - Wiring: `createFontFileFields` (trial defaults to `derived && enabled`, so script variants never get

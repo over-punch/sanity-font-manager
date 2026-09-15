@@ -42,8 +42,8 @@ const DERIVED_FORMATS = [
 function trialFormat(config) {
 	return {
 		name: 'trial',
-		title: 'Trial OTF',
-		description: `Auto-generated ${config.label} trial for download: the OTF (or TTF) subset to ${config.unicodeRange || 'the trial Unicode range'} and renamed "<Family> ${config.label}". Rebuilt on upload.`,
+		title: 'Trial file',
+		description: `Auto-generated ${config.label} trial for download: the OTF — or the TTF when there is no OTF — subset to ${config.unicodeRange || 'the trial Unicode range'} and renamed "<Family> ${config.label}", keeping the source's extension. Rebuilt on upload.`,
 		fields: [
 			{ name: 'unicodeRange', title: 'Unicode range', type: 'string', readOnly: true },
 			{ name: 'label', title: 'Label', type: 'string', readOnly: true },

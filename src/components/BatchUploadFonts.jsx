@@ -708,7 +708,7 @@ export const BatchUploadFonts = (props) => {
 									<Stack space={3}>
 										<Text size={1} weight="semibold" style={{ lineHeight: 1.6 }}>Trial Fonts</Text>
 										<Text size={1} muted style={{ lineHeight: 1.6 }}>
-											Builds a {TRIAL_CONFIG.label} trial OTF for every font with an OTF or TTF, subset to {TRIAL_CONFIG.unicodeRange}. Fonts whose trial is already current are skipped.
+											Builds a {TRIAL_CONFIG.label} trial for every font from its OTF, or its TTF when there is no OTF (keeping that extension), subset to {TRIAL_CONFIG.unicodeRange}. Fonts whose trial is already current are skipped.
 										</Text>
 										<Flex align="center" gap={2}>
 											<Switch

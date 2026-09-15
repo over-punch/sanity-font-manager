@@ -346,7 +346,9 @@ consuming site's own backfill script if it has one.
 Set `SANITY_STUDIO_TRIAL_UNICODE_RANGE` and every font gets a downloadable trial: its OTF — or its
 TTF when there is no OTF — subset to that range and renamed so it cannot collide with a licensed
 install. For a font "Romek Bold" that is family `Romek DEMO`, full name `Romek DEMO Bold`, PostScript
-name `RomekDEMO-Bold`, file `DEMO_Romek-Bold.otf`. **Leave it unset and nothing changes** — no field,
+name `RomekDEMO-Bold`, file `DEMO_Romek-Bold.otf`. A trial keeps its source's extension, so one cut
+from a TTF-only font is `DEMO_Romek-Bold.ttf` — which matters for variable fonts shipped as TTF.
+**Leave it unset and nothing changes** — no field,
 no row, no requests — so other foundries carry no cost.
 
 ```env
@@ -371,7 +373,7 @@ With the range set:
 
 The site does the actual build: implement `code: 'generate-trial'` on the fontWorker (see
 [the contract](#the-fontworker-endpoint-multi-format-conversion--subsetting)). Fetch `srcUrl`, subset
-it to `unicodes`, rename it with `label`, upload it, and set `fileInput.trial` to
+it to `unicodes`, rename it with `label`, upload it with `sourceFormat` (`otf` or `ttf`) as its extension, and set `fileInput.trial` to
 `{ _type: 'file', asset, unicodeRange: unicodes, label }`. Store `unicodes` and `label` exactly as
 received, since that is what the Studio compares against.
 
