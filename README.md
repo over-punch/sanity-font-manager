@@ -362,9 +362,11 @@ With the range set:
 
 - `createFontFileFields()` adds `fileInput.trial`, a file field that also stores the `unicodeRange` and
   `label` it was built with. Script variants (`derived: false`) do not get one.
-- **Batch upload** builds a trial for every font in the run once the web/subset phase finishes
-  ("Generating trial fonts…"). It is forced for those fonts, because a new OTF/TTF supersedes the old
-  trial. Turn it off for one uploader with `options.defaults.trialFonts: false`.
+- **Batch upload** rebuilds trials once the web/subset phase finishes ("Generating trial fonts…"), but
+  only for fonts whose trial source was in the upload: an OTF, or a TTF for a font with no OTF. A batch
+  of only web formats, or a TTF for a font that already has an OTF, leaves the trial alone; fill any
+  missing trials with Generate Trial Fonts. Turn it off for one uploader with
+  `options.defaults.trialFonts: false`.
 - **`SingleUploaderTool`** shows a **TRIAL** row (Build / Upload / Delete) and rebuilds the trial when an
   OTF is uploaded or built, or when a TTF is uploaded to a font that has no OTF.
 - The typeface **Utilities** panel gains **Generate Trial Fonts**, which fills in missing and *stale*

@@ -17,7 +17,8 @@ Last updated: 2026-09-15
   - `fileInput.trial` is a `file` with `unicodeRange` + `label` sub-fields written by the worker. That
     is the staleness signal: change the env range and every existing trial reads as stale.
   - Wiring: `createFontFileFields` (trial defaults to `derived && enabled`, so script variants never get
-    one), `executeUploadPlan` trial phase after web/subset (forced for the run's fonts),
+    one), `executeUploadPlan` trial phase after web/subset (only fonts whose trial source — the OTF, or the TTF when there is no
+    OTF — was uploaded in the run, via `selectFontsWithNewSource`; web-only uploads never rebuild),
     `UploadStep3Execute` status, `SingleUploaderTool` TRIAL row + rebuild on OTF upload/build or TTF
     upload with no OTF, `BatchUploadFonts` Utilities → Generate Trial Fonts (+ rebuild-current switch).
   - The site does the build. TDF's reference is `lib/buildTrialFont.js` (subset + rename in one

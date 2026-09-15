@@ -8,6 +8,7 @@ import {
 	isTrialCurrent,
 	requestTrialFont,
 	collectFontsForTrial,
+	selectFontsWithNewSource,
 	verifyTrialFonts,
 	generateTrialFonts,
 	DEFAULT_TRIAL_LABEL,
@@ -164,6 +165,32 @@ describe('collectFontsForTrial', () => {
 		expect(await collectFontsForTrial({ client, ids: [], config: CONFIG })).toEqual([]);
 		expect(await collectFontsForTrial({ client, ids: ['a'], config: getTrialConfig({ range: '' }) })).toEqual([]);
 		expect(client.fetch).not.toHaveBeenCalled();
+	});
+});
+
+describe('selectFontsWithNewSource', () => {
+	/** Fonts as collectFontsForTrial returns them: the source is the OTF when there is one */
+	const fonts = [
+		{ _id: 'otf-uploaded', sourceFormat: 'otf' },
+		{ _id: 'ttf-uploaded-no-otf', sourceFormat: 'ttf' },
+		{ _id: 'ttf-uploaded-has-otf', sourceFormat: 'otf' },
+		{ _id: 'web-only', sourceFormat: 'otf' },
+		{ _id: 'not-in-run', sourceFormat: 'ttf' },
+	];
+	/** What each font had uploaded in the batch */
+	const uploaded = new Map([
+		['otf-uploaded', new Set(['otf', 'woff2'])],
+		['ttf-uploaded-no-otf', new Set(['ttf'])],
+		['ttf-uploaded-has-otf', new Set(['ttf', 'woff2'])],
+		['web-only', new Set(['woff', 'woff2'])],
+	]);
+
+	it('rebuilds only fonts whose trial source was in the upload', () => {
+		expect(selectFontsWithNewSource(fonts, uploaded).map((f) => f._id)).toEqual(['otf-uploaded', 'ttf-uploaded-no-otf']);
+	});
+
+	it('selects nothing when no desktop source was uploaded', () => {
+		expect(selectFontsWithNewSource(fonts, new Map([['web-only', new Set(['woff2'])]]))).toEqual([]);
 	});
 });
 

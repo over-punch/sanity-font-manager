@@ -41,6 +41,7 @@ export {
 	getTrialConfig,
 	normalizeUnicodeRange,
 	isTrialCurrent,
+	selectFontsWithNewSource,
 	trialFileName,
 	DEFAULT_TRIAL_LABEL,
 } from './utils/trialFonts.js';

@@ -203,6 +203,19 @@ export async function collectFontsForTrial({ client, ids = [], config = getTrial
 }
 
 /**
+ * Keeps only the fonts whose trial source was part of an upload, so a batch rebuilds exactly the
+ * trials its files affect. The source is the OTF when the font has one, otherwise the TTF: an uploaded
+ * OTF rebuilds, an uploaded TTF rebuilds only a font with no OTF, and web formats never do.
+ *
+ * @param {object[]} fonts - from collectFontsForTrial, each carrying `sourceFormat`
+ * @param {Map<string, Set<string>>} uploadedFormats - font document id -> formats uploaded in the run
+ * @returns {object[]}
+ */
+export function selectFontsWithNewSource(fonts, uploadedFormats) {
+	return fonts.filter((font) => Boolean(uploadedFormats.get(font._id)?.has(font.sourceFormat)));
+}
+
+/**
  * Polls Sanity until every font carries a new trial built with the current config, or the timeout expires.
  *
  * "New" means the asset ref differs from the one the font had when it was requested, so a forced
