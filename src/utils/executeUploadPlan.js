@@ -6,6 +6,7 @@ import generateFontData from './generateFontData';
 import { parseVariableFontInstances } from './parseVariableFontInstances';
 import { updateTypefaceDocument } from './updateTypefaceDocument';
 import { generateWebAndSubset, collectFontsForGeneration } from './generateWebAndSubset';
+import { generateTrialFonts, collectFontsForTrial, getTrialConfig } from './trialFonts';
 import {
 	FONT_STATUS,
 	EXECUTION_STATUS,
@@ -228,6 +229,35 @@ export async function executeUploadPlan({
 		} catch (err) {
 			console.warn(`Web/subset generation failed after ${Date.now() - subsetStart}ms:`, err.message);
 			result.webAndSubset = { error: err.message };
+		}
+	}
+
+	// Build trial (DEMO) fonts when the studio sets SANITY_STUDIO_TRIAL_UNICODE_RANGE. Forced for every
+	// font in this run: a re-uploaded OTF or TTF makes the stored trial out of date even though its
+	// range and label still match. Like web/subset, it never fails the run.
+	if (plan.settings?.trialFonts) {
+		const trialStart = Date.now();
+		try {
+			if (onProgress) {
+				onProgress({ type: 'trial-collecting' });
+			}
+
+			const config = getTrialConfig();
+			const ids = [...result.fontRefs, ...result.variableRefs].map((r) => r._ref).filter(Boolean);
+			const fonts = await collectFontsForTrial({ client, ids, config, force: true });
+
+			const summary = await generateTrialFonts({
+				client,
+				siteUrl: plan.settings.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
+				fonts,
+				config,
+				onProgress: (p) => { if (onProgress) onProgress(p); },
+			});
+			result.trialFonts = summary;
+			console.log(`Upload phase: trial fonts finished in ${Date.now() - trialStart}ms`, summary);
+		} catch (err) {
+			console.warn(`Trial font generation failed after ${Date.now() - trialStart}ms:`, err.message);
+			result.trialFonts = { error: err.message };
 		}
 	}
 

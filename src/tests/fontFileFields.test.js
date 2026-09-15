@@ -1,9 +1,13 @@
 // Tests for createFontFileFields — the shared fileInput shape every foundry schema spreads
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createFontFileFields, FONT_FILE_FORMATS } from '../schema/fontFileFields';
 
 /** Field names in order, for shape assertions */
 const namesOf = (field) => field.fields.map(f => f.name);
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+});
 
 describe('createFontFileFields', () => {
 	it('emits every delivery and derived format in a stable order', () => {
@@ -66,6 +70,36 @@ describe('createFontFileFields', () => {
 
 	it('exposes the full format list for callers validating an override', () => {
 		expect(FONT_FILE_FORMATS).toContain('woff2_web');
-		expect(FONT_FILE_FORMATS).toHaveLength(9);
+		expect(FONT_FILE_FORMATS).toContain('trial');
+		expect(FONT_FILE_FORMATS).toHaveLength(10);
+	});
+});
+
+describe('createFontFileFields — trial file', () => {
+	it('leaves the trial file out when the studio sets no trial range', () => {
+		expect(namesOf(createFontFileFields())).not.toContain('trial');
+	});
+
+	it('adds the trial file last when the studio sets a trial range', () => {
+		vi.stubEnv('SANITY_STUDIO_TRIAL_UNICODE_RANGE', 'U+0020-007E');
+		const fields = createFontFileFields().fields;
+		const trial = fields[fields.length - 1];
+		expect(trial.name).toBe('trial');
+		expect(trial.type).toBe('file');
+		// The worker records what the file was built with, so these must be declared fields.
+		expect(trial.fields.map(f => f.name)).toEqual(['unicodeRange', 'label']);
+		expect(trial.description).toMatch(/DEMO/);
+		expect(trial.description).toMatch(/U\+0020-007E/);
+	});
+
+	it('keeps script variants free of trial files', () => {
+		vi.stubEnv('SANITY_STUDIO_TRIAL_UNICODE_RANGE', 'U+0020-007E');
+		expect(namesOf(createFontFileFields({ derived: false }))).not.toContain('trial');
+	});
+
+	it('lets a caller force the trial file on or off', () => {
+		expect(namesOf(createFontFileFields({ trial: true }))).toContain('trial');
+		vi.stubEnv('SANITY_STUDIO_TRIAL_UNICODE_RANGE', 'U+0020-007E');
+		expect(namesOf(createFontFileFields({ trial: false }))).not.toContain('trial');
 	});
 });

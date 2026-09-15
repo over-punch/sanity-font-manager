@@ -1,4 +1,4 @@
-// Per-font file manager — TTF/OTF/WOFF/WOFF2/CSS rows always visible; EOT/SVG/WEB/SUBSET/DATA behind an advanced toggle
+// Per-font file manager — TTF/OTF/WOFF/WOFF2/CSS rows always visible; WEB/SUBSET with a WOFF2, TRIAL (env-gated) with an OTF/TTF; EOT/SVG/DATA behind an advanced toggle
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button, Grid, Stack, Flex, Box, Text, Card, Switch } from '@liiift-studio/sanity-ui-compat';
@@ -18,8 +18,15 @@ import generateFontData from '../utils/generateFontData';
 import generateFontFile from '../utils/generateFontFile';
 import generateSubset from '../utils/generateSubset';
 import { generateWebAndSubset } from '../utils/generateWebAndSubset';
+import { getTrialConfig, generateTrialFonts, trialFileName } from '../utils/trialFonts';
 import { parseVariableFontInstances } from '../utils/parseVariableFontInstances';
 import StatusDisplay from './StatusDisplay';
+
+/**
+ * Trial font settings from SANITY_STUDIO_TRIAL_UNICODE_RANGE / SANITY_STUDIO_TRIAL_LABEL, fixed at
+ * build time. When disabled the TRIAL row is hidden and no upload builds a trial.
+ */
+const TRIAL_CONFIG = getTrialConfig();
 
 /**
  * Font file manager rendered inside a font document.
@@ -67,6 +74,7 @@ export const SingleUploaderTool = (props) => {
 	const handleSetFilenames = useCallback(async () => {
 		const woff2WebRef = fileInput?.woff2_web?.asset?._ref ?? null;
 		const woff2SubsetRef = fileInput?.woff2_subset?.asset?._ref ?? null;
+		const trialRef = fileInput?.trial?.asset?._ref ?? null;
 
 		const assetIds = [
 			fileInput?.ttf?.asset?._ref,
@@ -78,6 +86,7 @@ export const SingleUploaderTool = (props) => {
 			fileInput?.css?.asset?._ref,
 			woff2WebRef,
 			woff2SubsetRef,
+			trialRef,
 		].filter(Boolean);
 
 		if (assetIds.length === 0) { setFilenames({}); return; }
@@ -88,7 +97,9 @@ export const SingleUploaderTool = (props) => {
 		);
 
 		const fontNames = assetData.reduce((acc, cur) => {
-			if (cur.originalFilename.endsWith('.ttf')) acc.ttf = cur.originalFilename;
+			// Matched by id first: the trial is an .otf too, and would otherwise be listed as the OTF.
+			if (cur._id === trialRef) acc.trial = cur.originalFilename;
+			else if (cur.originalFilename.endsWith('.ttf')) acc.ttf = cur.originalFilename;
 			else if (cur.originalFilename.endsWith('.otf')) acc.otf = cur.originalFilename;
 			else if (cur.originalFilename.endsWith('.woff2') && cur._id === woff2WebRef) acc.woff2_web = cur.originalFilename;
 			else if (cur.originalFilename.endsWith('.woff2') && cur._id === woff2SubsetRef) acc.woff2_subset = cur.originalFilename;
@@ -220,6 +231,96 @@ export const SingleUploaderTool = (props) => {
 		return 'built';
 	}, [skipDerived, waitForWoff2, client, doc_id, doc_slug, doc_title, doc_variableFont, doc_style, doc_weight]);
 
+	/**
+	 * Waits for a newly built desktop file to land on the document and returns its CDN URL.
+	 *
+	 * generateFontFile posts `no-cors` and resolves before the worker has written anything, so a
+	 * trial requested straight after a build would otherwise be cut from the previous file.
+	 *
+	 * @param {'otf'|'ttf'} format
+	 * @param {string|null} previousRef - asset ref before the build; null accepts any asset
+	 * @returns {Promise<string|null>} the new file's URL, or null if it never appeared
+	 */
+	const waitForDesktopFile = useCallback(async (format, previousRef, timeoutMs = 120000, intervalMs = 3000) => {
+		const query = format === 'otf'
+			? `*[_id == $id][0]{ "ref": fileInput.otf.asset._ref, "url": fileInput.otf.asset->url }`
+			: `*[_id == $id][0]{ "ref": fileInput.ttf.asset._ref, "url": fileInput.ttf.asset->url }`;
+		const deadline = Date.now() + timeoutMs;
+		while (Date.now() < deadline) {
+			const file = await client.fetch(query, { id: doc_id });
+			if (file?.url && file.ref !== previousRef) return file.url;
+			await new Promise((r) => setTimeout(r, intervalMs));
+		}
+		return null;
+	}, [client, doc_id]);
+
+	/**
+	 * Builds the trial (DEMO) font through the site's fontWorker and waits for it to land.
+	 *
+	 * The source is the OTF when there is one, otherwise the TTF. Pass the source explicitly right
+	 * after an upload or build — `fileInput` in this render still points at the previous file.
+	 *
+	 * @param {object} [source] - { url, format } of the desktop file to build from
+	 * @returns {Promise<'built'|'disabled'|'no-source'|'pending'>} 'pending' leaves its error on screen
+	 */
+	const deriveTrial = useCallback(async (source) => {
+		if (!TRIAL_CONFIG.enabled) return 'disabled';
+
+		let sourceUrl = source?.url;
+		let sourceFormat = source?.format;
+		if (!sourceUrl) {
+			sourceFormat = fileInput?.otf?.asset?._ref ? 'otf' : fileInput?.ttf?.asset?._ref ? 'ttf' : null;
+			if (!sourceFormat) return 'no-source';
+			sourceUrl = await client.fetch(`*[_id == $id][0].url`, { id: fileInput[sourceFormat].asset._ref });
+			if (!sourceUrl) return 'no-source';
+		}
+
+		setStatus('Building TRIAL');
+		setMessage(`Building ${TRIAL_CONFIG.label} trial font...`);
+
+		const summary = await generateTrialFonts({
+			client,
+			siteUrl: process.env.SANITY_STUDIO_SITE_URL,
+			fonts: [{
+				_id: doc_id,
+				title: doc_title,
+				sourceUrl,
+				sourceFormat,
+				trialRef: fileInput?.trial?.asset?._ref ?? null,
+			}],
+			config: TRIAL_CONFIG,
+		});
+
+		if (!summary?.done?.length) {
+			setMessage('TRIAL did not finish — use Build on the TRIAL row to retry');
+			setStatus('TRIAL did not finish — use Build on the TRIAL row to retry');
+			setError(true);
+			setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 5000);
+			return 'pending';
+		}
+
+		setMessage('TRIAL built');
+		return 'built';
+	}, [client, doc_id, doc_title, fileInput]);
+
+	/** Rebuilds the trial font from the stored OTF, or the TTF when there is no OTF. */
+	const handleBuildTrial = useCallback(async () => {
+		try {
+			setError(false);
+			const outcome = await deriveTrial();
+			if (outcome === 'pending') return;
+			if (outcome === 'no-source') throw new Error('An OTF or TTF is required to build the trial');
+			setStatus('TRIAL built successfully');
+			setTimeout(() => { setMessage(''); setStatus('ready'); }, 2000);
+		} catch (err) {
+			console.error('Error building trial font:', err);
+			setMessage('Error: ' + err.message);
+			setStatus('Error building TRIAL');
+			setError(true);
+			setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 3000);
+		}
+	}, [deriveTrial]);
+
 	const handleGenerateFontFile = useCallback(async (code, sourceFile) => {
 		const isMissing = Array.isArray(code);
 		const label = code === 'all' ? 'all font files' : isMissing ? 'missing files' : code + ' file';
@@ -253,6 +354,16 @@ export const SingleUploaderTool = (props) => {
 				if (derived === 'pending') return;
 			}
 
+			// A rebuilt OTF supersedes the trial cut from the old one. Wait for the new file first —
+			// the worker writes it after this request has already resolved.
+			if (TRIAL_CONFIG.enabled && codes.includes('otf')) {
+				const otfUrl = await waitForDesktopFile('otf', fileInput?.otf?.asset?._ref ?? null);
+				if (otfUrl) {
+					const trial = await deriveTrial({ url: otfUrl, format: 'otf' });
+					if (trial === 'pending') return;
+				}
+			}
+
 			setTimeout(() => { setMessage(''); setStatus('ready'); }, 2000);
 		} catch (err) {
 			console.error('Error building font files:', err);
@@ -261,7 +372,7 @@ export const SingleUploaderTool = (props) => {
 			setError(true);
 			setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 3000);
 		}
-	}, [doc_id, doc_title, doc_variableFont, doc_style, doc_weight, doc_slug, fileInput, client]);
+	}, [doc_id, doc_title, doc_variableFont, doc_style, doc_weight, doc_slug, fileInput, client, deriveWebAndSubset, waitForDesktopFile, deriveTrial]);
 
 	/** Re-extracts metadata from the stored TTF and regenerates font data fields. */
 	const handleGenerateFontData = useCallback(async () => {
@@ -377,7 +488,10 @@ export const SingleUploaderTool = (props) => {
 			if (!file) return;
 
 			const ext = file.name.split('.').pop();
-			const filename = `${doc_slug.current}-${fieldName}.${ext}`;
+			const isTrial = fieldName === 'trial';
+			const filename = isTrial
+				? `${trialFileName(doc_title || doc_slug.current, TRIAL_CONFIG.label)}.${ext}`
+				: `${doc_slug.current}-${fieldName}.${ext}`;
 
 			setMessage(`Uploading ${fieldName}...`);
 			setStatus(`Uploading ${fieldName}`);
@@ -386,7 +500,13 @@ export const SingleUploaderTool = (props) => {
 			const asset = await client.assets.upload('file', file, { filename });
 			const newFileInput = {
 				...fileInput,
-				[fieldName]: { _type: 'file', asset: { _ref: asset._id, _type: 'reference' } },
+				[fieldName]: {
+					_type: 'file',
+					asset: { _ref: asset._id, _type: 'reference' },
+					// A hand-made trial is stamped with the current settings so the Trial Fonts utility
+					// treats it as current. The next upload of this font's OTF/TTF still replaces it.
+					...(isTrial ? { unicodeRange: TRIAL_CONFIG.unicodeRange, label: TRIAL_CONFIG.label } : {}),
+				},
 			};
 			onChange(set(newFileInput));
 
@@ -400,7 +520,7 @@ export const SingleUploaderTool = (props) => {
 			setError(true);
 			setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 3000);
 		}
-	}, [fileInput, onChange, doc_slug, client]);
+	}, [fileInput, onChange, doc_slug, doc_title, client]);
 
 	/** Uploads a single font file and triggers CSS/metadata generation as appropriate. */
 	const handleUpload = useCallback(async (event, code) => {
@@ -464,6 +584,14 @@ export const SingleUploaderTool = (props) => {
 			}
 
 			onChange(set(newFileInput));
+
+			// A new OTF always supersedes the trial; a TTF only does when there is no OTF to build from.
+			// The uploaded asset's own URL is passed because this render's fileInput is still the old one.
+			if (TRIAL_CONFIG.enabled && (code === 'otf' || (code === 'ttf' && !fileInput?.otf?.asset?._ref))) {
+				const trial = await deriveTrial({ url: asset.url, format: code });
+				if (trial === 'pending') return;
+			}
+
 			setTimeout(() => { setMessage(''); setStatus('ready'); }, 2000);
 		} catch (err) {
 			console.error('Error uploading file:', err);
@@ -472,7 +600,7 @@ export const SingleUploaderTool = (props) => {
 			setError(true);
 			setTimeout(() => { setMessage(''); setStatus('ready'); setError(false); }, 3000);
 		}
-	}, [fileInput, onChange, doc_title, doc_typefaceName, doc_variableFont, doc_weight, doc_slug, doc_id, client, weightKeywordList, italicKeywordList, deriveWebAndSubset]);
+	}, [fileInput, onChange, doc_title, doc_typefaceName, doc_variableFont, doc_weight, doc_slug, doc_id, client, weightKeywordList, italicKeywordList, deriveWebAndSubset, deriveTrial]);
 
 	/** Deletes a single fileInput font file asset. */
 	const handleDelete = useCallback(async (code) => {
@@ -611,8 +739,11 @@ export const SingleUploaderTool = (props) => {
 		);
 	};
 
-	/** Renders an upload/build/delete row for a top-level document asset field (woff2_web, woff2_subset). */
-	const renderTopLevelAssetSection = (label, fieldName, assetRef, filename, onBuild) => {
+	/**
+	 * Renders an upload/build/delete row for a derived fileInput field (woff2_web, woff2_subset, trial).
+	 * `canBuild` says whether the row's source exists — the WOFF2 for web/subset, the OTF/TTF for trial.
+	 */
+	const renderTopLevelAssetSection = (label, fieldName, assetRef, filename, onBuild, canBuild = !!fileInput?.woff2) => {
 		const hasFile = !!assetRef;
 		const fileUrl = hasFile
 			? `https://cdn.sanity.io/files/${process.env.SANITY_STUDIO_PROJECT_ID}/${process.env.SANITY_STUDIO_DATASET}/${assetRef.replace('file-', '').replace('-', '.')}`
@@ -635,7 +766,7 @@ export const SingleUploaderTool = (props) => {
 					</Flex>
 					{status === 'ready' && (
 						<Flex gap={1} align="center" style={{ flexShrink: 0 }}>
-							{onBuild && fileInput?.woff2 && (
+							{onBuild && canBuild && (
 								<Button mode="ghost" tone="primary" fontSize={1} padding={2} onClick={onBuild} text="Build" />
 							)}
 							<Button as="label" mode="ghost" tone="primary" fontSize={1} padding={2} style={{ cursor: 'pointer' }}>
@@ -767,6 +898,15 @@ export const SingleUploaderTool = (props) => {
 			    prerequisites, and hiding them is how two typefaces shipped without them. */}
 			{(showAdvanced || fileInput?.woff2?.asset?._ref) && renderTopLevelAssetSection('WEB', 'woff2_web', fileInput?.woff2_web?.asset?._ref, filenames?.woff2_web, handleGenerateSubsetAndWeb)}
 			{(showAdvanced || fileInput?.woff2?.asset?._ref) && renderTopLevelAssetSection('SUBSET', 'woff2_subset', fileInput?.woff2_subset?.asset?._ref, filenames?.woff2_subset, handleGenerateSubsetAndWeb)}
+			{/* Trial download — only when the studio sets SANITY_STUDIO_TRIAL_UNICODE_RANGE, and built from the OTF or TTF. */}
+			{TRIAL_CONFIG.enabled && (showAdvanced || fileInput?.otf?.asset?._ref || fileInput?.ttf?.asset?._ref) && renderTopLevelAssetSection(
+				'TRIAL',
+				'trial',
+				fileInput?.trial?.asset?._ref,
+				filenames?.trial,
+				handleBuildTrial,
+				!!(fileInput?.otf?.asset?._ref || fileInput?.ttf?.asset?._ref),
+			)}
 			{showAdvanced && renderFontSection('eot', 'ttf')}
 			{showAdvanced && renderFontSection('svg', 'ttf')}
 			{renderCssSection()}

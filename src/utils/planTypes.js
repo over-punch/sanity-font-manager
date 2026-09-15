@@ -209,6 +209,9 @@ export function createEmptyPlan(settings = {}) {
 			// the `fileInput.woff2_web`/`woff2_subset` schema fields and a subset-capable
 			// /api/sanity/fontWorker on the consuming site. See generateWebAndSubset.js.
 			webAndSubset: false,
+			// Build trial (DEMO) fonts after upload. The upload modal switches it on when the studio sets
+			// SANITY_STUDIO_TRIAL_UNICODE_RANGE; it also needs a fontWorker handling `generate-trial`.
+			trialFonts: false,
 			preserveShortenedNames: false,
 			preserveFileNames: false,
 			...settings,

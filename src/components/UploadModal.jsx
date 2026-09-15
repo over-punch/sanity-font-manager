@@ -4,6 +4,7 @@ import React, { useReducer, useCallback, useState, useMemo, useRef, useEffect } 
 import { Dialog, Box, Flex, Text, Badge, Button } from '@liiift-studio/sanity-ui-compat';
 import { planReducer } from '../utils/planReducer';
 import { createEmptyPlan, PLAN_PHASE } from '../utils/planTypes';
+import { getTrialConfig } from '../utils/trialFonts';
 import { buildUploadPlan } from '../utils/buildUploadPlan';
 import { generateStyleKeywords } from '../utils/generateKeywords';
 import UploadStep1Settings from './UploadStep1Settings';
@@ -62,6 +63,9 @@ export default function UploadModal({
 		// Still defaults to false: requiring a file an absent fontWorker never writes stalls
 		// every run until the poll times out.
 		requireSubset: defaults.requireSubset === true,
+		// Env-gated rather than opt-in: a studio that sets SANITY_STUDIO_TRIAL_UNICODE_RANGE wants
+		// trials built on every upload. `defaults.trialFonts: false` still switches it off per field.
+		trialFonts: defaults.trialFonts !== false && getTrialConfig().enabled,
 		siteUrl: defaults.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
 		preserveShortenedNames: defaults.preserveShortenedNames ?? false,
 		preserveFileNames: defaults.preserveFileNames ?? false,

@@ -15,6 +15,7 @@ import { generateStyleKeywords } from '../utils/generateKeywords';
 import { renameFontDocuments } from '../utils/regenerateFontData';
 import { updateFontPrices } from '../utils/updateFontPrices';
 import generateCssFile from '../utils/generateCssFile';
+import { getTrialConfig, collectFontsForTrial, generateTrialFonts } from '../utils/trialFonts';
 
 import StatusDisplay from './StatusDisplay';
 import PriceInput from './PriceInput';
@@ -22,6 +23,12 @@ import { RegenerateSubfamiliesComponent } from './RegenerateSubfamiliesComponent
 
 // Accepted font file extensions
 const ACCEPTED_EXTENSIONS = ['ttf', 'otf', 'woff', 'woff2', 'eot', 'svg'];
+
+/**
+ * Trial font settings from SANITY_STUDIO_TRIAL_UNICODE_RANGE / SANITY_STUDIO_TRIAL_LABEL, fixed at
+ * build time. When disabled the Trial Fonts utility is not shown.
+ */
+const TRIAL_CONFIG = getTrialConfig();
 
 /** Formats elapsed seconds as "Xm Ys" or "Ys". */
 const formatElapsed = (s) => {
@@ -46,6 +53,8 @@ export const BatchUploadFonts = (props) => {
 	const [isDragging, setIsDragging] = useState(false);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
 	const [showUploadModal, setShowUploadModal] = useState(false);
+	/** Also rebuild trials that are already current, not only missing or stale ones */
+	const [rebuildTrials, setRebuildTrials] = useState(false);
 
 	const fileInputRef = useRef(null);
 	const elapsedTimerRef = useRef(null);
@@ -345,6 +354,50 @@ export const BatchUploadFonts = (props) => {
 		}
 		setReady(true);
 	}, [title, slug, client]);
+
+	/** Builds trial (DEMO) fonts for every font in this typeface that has an OTF or TTF. */
+	const handleGenerateTrialFonts = useCallback(async () => {
+		try {
+			setReady('trial');
+			setError(false);
+			setStatus('Collecting fonts for trial generation...');
+
+			const ids = [...(stylesObject?.fonts || []), ...(stylesObject?.variableFont || [])]
+				.map((ref) => ref?._ref)
+				.filter(Boolean);
+			if (!ids.length) { setStatus('No fonts found in typeface'); setError(true); setReady(true); return; }
+
+			const fonts = await collectFontsForTrial({ client, ids, config: TRIAL_CONFIG, force: rebuildTrials });
+			if (!fonts.length) {
+				setStatus(`Every font with an OTF or TTF already has a current ${TRIAL_CONFIG.label} trial`);
+				setReady(true);
+				return;
+			}
+
+			const summary = await generateTrialFonts({
+				client,
+				siteUrl: defaults.siteUrl || process.env.SANITY_STUDIO_SITE_URL,
+				fonts,
+				config: TRIAL_CONFIG,
+				onProgress: (event) => {
+					if (event.type === 'trial-requested') setStatus(`Building trial fonts: ${event.requested} of ${event.total} requested...`);
+					else if (event.type === 'trial-progress') setStatus(`Confirming trial fonts: ${event.done} of ${event.total} landed...`);
+				},
+			});
+
+			if (summary.done.length < fonts.length) {
+				setStatus(`Built ${summary.done.length} of ${fonts.length} trial fonts — the rest did not confirm in time. Run again to retry them.`);
+				setError(true);
+			} else {
+				setStatus(`Built ${summary.done.length} trial fonts`);
+			}
+		} catch (err) {
+			console.error('Error generating trial fonts:', err);
+			setError(true);
+			setStatus(`Error: ${err.message}`);
+		}
+		setReady(true);
+	}, [client, stylesObject, rebuildTrials, defaults.siteUrl]);
 
 	/** Handles price field changes. */
 	const handleInputChange = (e) => {
@@ -649,6 +702,30 @@ export const BatchUploadFonts = (props) => {
 										: <Button mode="ghost" tone="primary" text="Regenerate CSS Files" style={{ width: '100%' }} onClick={handleRegenerateCssFiles} disabled={ready !== true} />
 									}
 								</Stack>
+
+								{/* Trial Fonts — only when the studio sets SANITY_STUDIO_TRIAL_UNICODE_RANGE */}
+								{TRIAL_CONFIG.enabled && (
+									<Stack space={3}>
+										<Text size={1} weight="semibold" style={{ lineHeight: 1.6 }}>Trial Fonts</Text>
+										<Text size={1} muted style={{ lineHeight: 1.6 }}>
+											Builds a {TRIAL_CONFIG.label} trial OTF for every font with an OTF or TTF, subset to {TRIAL_CONFIG.unicodeRange}. Fonts whose trial is already current are skipped.
+										</Text>
+										<Flex align="center" gap={2}>
+											<Switch
+												checked={rebuildTrials}
+												onChange={(e) => setRebuildTrials(e.target.checked)}
+											/>
+											{renderTooltipLabel(
+												'Rebuild existing trials',
+												'Also rebuild trials that are already current, e.g. after replacing font files outside the batch uploader.'
+											)}
+										</Flex>
+										{ready === 'trial'
+											? renderProcessing()
+											: <Button mode="ghost" tone="primary" text="Generate Trial Fonts" style={{ width: '100%' }} onClick={handleGenerateTrialFonts} disabled={ready !== true} />
+										}
+									</Stack>
+								)}
 
 							</Stack>
 						</Card>
