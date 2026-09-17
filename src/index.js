@@ -125,6 +125,15 @@ export {
 export { openTypeField, createOpenTypeField } from './schema/openTypeField.js';
 export { OPENTYPE_FEATURE_TAGS } from './schema/openTypeFeatureTags.js';
 export { collectSupportedTags, dedupeFontDocs, detectOpenTypeFeatures } from './utils/detectOpenTypeFeatures.js';
+export { createOpenTypeShowcaseField } from './schema/openTypeShowcaseField.js';
+export { OpenTypeFeaturePicker } from './components/OpenTypeFeaturePicker.jsx';
+export {
+	featureTagsToCss,
+	cssToFeatureTags,
+	listDetectedFeatures,
+	matchFeatureKey,
+	resolveShowcaseCard,
+} from './utils/openTypeShowcase.js';
 export { styleCountField } from './schema/styleCountField.js';
 export { stylisticSetField } from './schema/stylisticSetField.js';
 export { createStylesField } from './schema/stylesField.js';

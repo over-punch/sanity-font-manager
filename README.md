@@ -815,6 +815,45 @@ Requires the `stylisticSets` group to be declared in your schema's `groups` arra
 { name: 'stylisticSets', title: 'Stylistic Sets' }
 ```
 
+New work should prefer `createOpenTypeShowcaseField` below — this field's cards each carry their own copy of the feature name and tag, which drifts from the reviewed `openType` field.
+
+### `createOpenTypeShowcaseField`
+
+An array of OpenType demo cards that **reference** the typeface's detected `openType` features instead of repeating them. The `openType` field stays the single source of truth — "Detect OTF" finds the features, the foundry reviews their titles and tags — and a card only adds what is its own: demo text (backtick syntax), the glyphs the feature affects, display size and default-off flags. The feature is picked with `OpenTypeFeaturePicker`, which lists only the features this typeface has detected and stores the openType key (`stylisticSet1`), never a CSS string.
+
+```js
+import { createOpenTypeField, createOpenTypeShowcaseField } from '@liiift-studio/sanity-font-manager';
+
+// In your typeface schema fields array — keep the two together, openType first:
+createOpenTypeField(),
+createOpenTypeShowcaseField({ group: 'openType' }),
+```
+
+| Option | Default | |
+|---|---|---|
+| `name` | `'openTypeShowcase'` | field name |
+| `title`, `description`, `group` | — | passed through |
+| `memberName` | `'featuredWord'` | `_type` of the array members |
+| `openTypePath` | `['openType']` | document path of the openType field |
+| `sizes` | `true` | include the `xl`/`lg`/`md`/`sm` radio |
+| `legacyFeatureField` | `false` | keep a hidden, read-only `stylisticFeature` string |
+
+A card opens on the fields editors fill in — feature, content, glyphs, label override, size, italics. The default-off toggles (`ligatures`, `calt`) and the CSS override (`specialtyCss`) sit in a collapsed **Options** fieldset; that is form layout only, the stored card stays flat.
+
+**Adopting it in place of `stylisticSetField.featured`:** the member shape is compatible (`content`, `label`, `specialtyCss`, `ligatures`, `calt`, `italics`, `size` keep their names), so pass `{ name: 'featured', memberName: 'featuredWord', legacyFeatureField: true }` inside the existing `stylisticSet` object. Then migrate each card: `matchFeatureKey(card.stylisticFeature, openType)` returns the openType key when the tags match a detected feature exactly, and the matching `sets[].content` moves to the card's `glyphs`.
+
+**Front end:** resolve each card against the same document's `openType` value.
+
+```js
+import { resolveShowcaseCard } from '@liiift-studio/sanity-font-manager';
+
+const { label, css, detected } = resolveShowcaseCard(card, typeface.openType);
+// label: card.label, else the reviewed openType title
+// css:   card.specialtyCss, else the picked feature's tags ("'tnum' 1, 'lnum' 1"), else legacy stylisticFeature
+```
+
+The helpers (`resolveShowcaseCard`, `matchFeatureKey`, `listDetectedFeatures`, `featureTagsToCss`, `cssToFeatureTags`) live in `src/utils/openTypeShowcase.js` and import nothing from Sanity or React. A site that does not want the Studio package as a dependency can copy that one file.
+
 ---
 
 ## Hook
