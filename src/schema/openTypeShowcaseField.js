@@ -11,6 +11,9 @@ const SHOWCASE_SIZES = [
 	{ title: 'Small', value: 'sm' },
 ];
 
+/** Name of the collapsed fieldset holding a card's default-off toggles and CSS override. */
+const OPTIONS_FIELDSET = 'options';
+
 /**
  * Builds an array field of OpenType demo cards.
  *
@@ -97,20 +100,25 @@ export function createOpenTypeShowcaseField({
 			name: 'italics',
 			type: 'boolean',
 		},
+		// The rarely-touched settings sit in a collapsed fieldset so a card opens on what editors
+		// actually fill in. A fieldset is form layout only — the stored card stays flat.
 		{
 			title: 'Disable ligatures by default',
 			name: 'ligatures',
 			type: 'boolean',
+			fieldset: OPTIONS_FIELDSET,
 		},
 		{
 			title: 'Disable contextual alternates by default',
 			name: 'calt',
 			type: 'boolean',
+			fieldset: OPTIONS_FIELDSET,
 		},
 		{
 			title: 'CSS override (advanced)',
 			name: 'specialtyCss',
 			type: 'string',
+			fieldset: OPTIONS_FIELDSET,
 			description: 'Replaces the picked feature’s CSS — only for a demo that needs a combination the OpenType field does not list.',
 			placeholder: "'c2sc' 1, 'ss02' 1",
 		},
@@ -139,6 +147,13 @@ export function createOpenTypeShowcaseField({
 				name: memberName,
 				type: 'object',
 				icon: StringIcon,
+				fieldsets: [
+					{
+						name: OPTIONS_FIELDSET,
+						title: 'Options',
+						options: { collapsible: true, collapsed: true },
+					},
+				],
 				fields: memberFields,
 				preview: {
 					select: { content: 'content', label: 'label', feature: 'feature' },
