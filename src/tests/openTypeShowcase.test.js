@@ -137,11 +137,11 @@ describe('createOpenTypeShowcaseField', () => {
 		expect(legacy).toMatchObject({ type: 'string', hidden: true, readOnly: true });
 	});
 
-	it('tucks the default-off toggles and the CSS override into a collapsed Options fieldset', () => {
+	it('tucks the italics and default-off toggles and the CSS override into a collapsed Options fieldset', () => {
 		const member = createOpenTypeShowcaseField().of[0];
 		expect(member.fieldsets).toEqual([{ name: 'options', title: 'Options', options: { collapsible: true, collapsed: true } }]);
 		const inOptions = member.fields.filter((f) => f.fieldset === 'options').map((f) => f.name);
-		expect(inOptions).toEqual(['ligatures', 'calt', 'specialtyCss']);
+		expect(inOptions).toEqual(['italics', 'ligatures', 'calt', 'specialtyCss']);
 	});
 
 	it('subtitles a card by its label, then by the picked feature', () => {

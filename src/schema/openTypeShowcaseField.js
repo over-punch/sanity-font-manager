@@ -11,7 +11,7 @@ const SHOWCASE_SIZES = [
 	{ title: 'Small', value: 'sm' },
 ];
 
-/** Name of the collapsed fieldset holding a card's default-off toggles and CSS override. */
+/** Name of the collapsed fieldset holding a card's italics and default-off toggles and its CSS override. */
 const OPTIONS_FIELDSET = 'options';
 
 /**
@@ -95,13 +95,14 @@ export function createOpenTypeShowcaseField({
 					},
 				]
 			: []),
+		// The rarely-touched settings sit in a collapsed fieldset so a card opens on what editors
+		// actually fill in. A fieldset is form layout only — the stored card stays flat.
 		{
 			title: 'Only applies to italics',
 			name: 'italics',
 			type: 'boolean',
+			fieldset: OPTIONS_FIELDSET,
 		},
-		// The rarely-touched settings sit in a collapsed fieldset so a card opens on what editors
-		// actually fill in. A fieldset is form layout only — the stored card stays flat.
 		{
 			title: 'Disable ligatures by default',
 			name: 'ligatures',
