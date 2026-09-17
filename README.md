@@ -838,7 +838,7 @@ createOpenTypeShowcaseField({ group: 'openType' }),
 | `sizes` | `true` | include the `xl`/`lg`/`md`/`sm` radio |
 | `legacyFeatureField` | `false` | keep a hidden, read-only `stylisticFeature` string |
 
-A card opens on the fields editors fill in — feature, content, glyphs, label override, size, italics. The default-off toggles (`ligatures`, `calt`) and the CSS override (`specialtyCss`) sit in a collapsed **Options** fieldset; that is form layout only, the stored card stays flat.
+A card opens on the fields editors fill in — feature, content, glyphs, label override, size. The italics-only toggle (`italics`), the default-off toggles (`ligatures`, `calt`) and the CSS override (`specialtyCss`) sit in a collapsed **Options** fieldset; that is form layout only, the stored card stays flat.
 
 **Adopting it in place of `stylisticSetField.featured`:** the member shape is compatible (`content`, `label`, `specialtyCss`, `ligatures`, `calt`, `italics`, `size` keep their names), so pass `{ name: 'featured', memberName: 'featuredWord', legacyFeatureField: true }` inside the existing `stylisticSet` object. Then migrate each card: `matchFeatureKey(card.stylisticFeature, openType)` returns the openType key when the tags match a detected feature exactly, and the matching `sets[].content` moves to the card's `glyphs`.
 
