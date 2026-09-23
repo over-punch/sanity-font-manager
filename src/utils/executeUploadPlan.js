@@ -17,6 +17,12 @@ import {
 } from './planTypes';
 
 /**
+ * fileInput fields the consuming site's fontWorker builds from `fileInput.woff2`. A new WOFF2 makes
+ * every one of them stale, so a re-upload must not carry them over when it will rebuild them.
+ */
+const WOFF2_DERIVED_FIELDS = ['woff2_web', 'woff2_subset', 'css_subset'];
+
+/**
  * Phase 2: Executes a finalized plan — uploads assets, creates/updates
  * font documents, patches the typeface document.
  *
@@ -482,10 +488,20 @@ export async function executeSingleFont({ entry, plan, client, progress, onProgr
 			// typefaceName, description, scriptFileInput, variableInstanceReferences) are NOT in the set, so
 			// `.set()` leaves them untouched — a re-upload of the binary can't reset a sold product's price/URL.
 			// Keep any font-file formats that weren't part of this re-upload; fall back to existing metadata.
+			// Files derived from the WOFF2 are the exception when a new WOFF2 landed and the studio rebuilds
+			// them: carried over, they describe the OLD binary yet read as complete, so the web/subset phase
+			// skipped every re-uploaded font and the site kept serving the previous design. Dropping them is
+			// what makes collectFontsForGeneration pick the font up again.
+			const woff2Replaced = !!refreshFields.fileInput.woff2;
+			const dropDerived = woff2Replaced && plan.settings?.webAndSubset === true;
 			if (target.fileInput) {
 				Object.keys(target.fileInput).forEach(key => {
+					if (dropDerived && WOFF2_DERIVED_FIELDS.includes(key)) return;
 					if (!refreshFields.fileInput[key]) refreshFields.fileInput[key] = target.fileInput[key];
 				});
+				if (woff2Replaced && !dropDerived && WOFF2_DERIVED_FIELDS.some(key => target.fileInput[key])) {
+					console.warn(`New WOFF2 for "${entry.title}" — its web/subset files were built from the previous one and web/subset generation is off for this studio, so they are now out of date.`);
+				}
 			}
 			if (!refreshFields.metaData && target.metaData) refreshFields.metaData = target.metaData;
 			if (!refreshFields.metrics && target.metrics) refreshFields.metrics = target.metrics;
