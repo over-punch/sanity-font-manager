@@ -295,6 +295,10 @@ Behaviour, in `utils/generateWebAndSubset.js`:
 - Runs after the fonts and the typeface document are written, so nothing above it can be affected.
 - Reads back what actually landed and **skips any font that is already complete**, so re-running a
   partial upload only fills the gaps. Pass `force` to rebuild regardless.
+- **A re-upload with a new WOFF2 rebuilds them (2.24.2).** The update patch drops the old
+  `woff2_web`, `woff2_subset` and `css_subset`, which were built from the previous binary; carried
+  over, they read as complete and the font was skipped. With `webAndSubset` off they are kept and a
+  console warning says they are out of date.
 - Requests are throttled (4 at a time) — the worker does real subsetting per font.
 - The Studio and site are different origins, so the POST is `no-cors` and its response is opaque.
   Success is therefore confirmed by **polling Sanity** until the expected fields appear, not by the

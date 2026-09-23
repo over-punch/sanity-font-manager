@@ -174,6 +174,67 @@ describe('executeSingleFont', () => {
 	});
 });
 
+describe('WOFF2-derived files on a re-upload', () => {
+	/** An existing document holding a WOFF2 plus the web/subset files built from it */
+	const existingWithDerived = () => ({
+		recommendation: RECOMMENDATION.USE_EXACT,
+		userChoice: null,
+		exact: {
+			_id: 'font-x',
+			fileInput: {
+				ttf: { _type: 'file', asset: { _ref: 'old-ttf' } },
+				woff2: { _type: 'file', asset: { _ref: 'old-woff2' } },
+				woff2_web: { _type: 'file', asset: { _ref: 'old-web' } },
+				woff2_subset: { _type: 'file', asset: { _ref: 'old-subset' } },
+				css_subset: { _type: 'file', asset: { _ref: 'old-css-subset' } },
+			},
+			metaData: {},
+			metrics: {},
+		},
+		candidates: [],
+	});
+
+	/** A single-font entry uploading the given file names */
+	const entryWith = (names) => ({ ...makeEntry(existingWithDerived()), files: names.map((name) => ({ name })) });
+
+	it('drops the stale web/subset files when a new WOFF2 lands and the studio rebuilds them', async () => {
+		const { client, patches } = makeClient();
+		const plan = { settings: { ...PLAN.settings, webAndSubset: true } };
+
+		await executeSingleFont({ entry: entryWith(['x.woff2']), plan, client, progress: makeProgress(), onProgress: null });
+
+		const fileInput = patches[0].payload.fileInput;
+		expect(fileInput.woff2.asset._ref).toBe('asset-new-1');
+		expect(fileInput).not.toHaveProperty('woff2_web');
+		expect(fileInput).not.toHaveProperty('woff2_subset');
+		expect(fileInput).not.toHaveProperty('css_subset');
+		// Formats not derived from the WOFF2 still carry over.
+		expect(fileInput.ttf.asset._ref).toBe('old-ttf');
+	});
+
+	it('keeps the web/subset files when the upload has no new WOFF2', async () => {
+		const { client, patches } = makeClient();
+		const plan = { settings: { ...PLAN.settings, webAndSubset: true } };
+
+		await executeSingleFont({ entry: entryWith(['x.ttf']), plan, client, progress: makeProgress(), onProgress: null });
+
+		const fileInput = patches[0].payload.fileInput;
+		expect(fileInput.woff2_web.asset._ref).toBe('old-web');
+		expect(fileInput.woff2_subset.asset._ref).toBe('old-subset');
+	});
+
+	it('keeps them, with a warning, when the studio does not rebuild web/subset files', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const { client, patches } = makeClient();
+
+		await executeSingleFont({ entry: entryWith(['x.woff2']), plan: PLAN, client, progress: makeProgress(), onProgress: null });
+
+		expect(patches[0].payload.fileInput.woff2_subset.asset._ref).toBe('old-subset');
+		expect(warn).toHaveBeenCalledWith(expect.stringMatching(/out of date/));
+		warn.mockRestore();
+	});
+});
+
 describe('opentypeFeatures on a re-upload', () => {
 	/** A decision that routes executeSingleFont down the update path against an existing document */
 	const updateDecision = () => ({
