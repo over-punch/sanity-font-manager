@@ -1055,4 +1055,4 @@ To restore the published package in a consumer repo, run `npm install` inside th
 
 ## License
 
-[MIT](LICENSE) — [Liiift Studio](https://github.com/Liiift-Studio)
+[MIT](LICENSE) — [Liiift Studio](https://github.com/over-punch)
