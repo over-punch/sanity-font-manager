@@ -2,7 +2,7 @@
 
 import React, { useCallback } from 'react';
 import { set, unset, useFormValue } from 'sanity';
-import { Stack, Select, Text, Card } from '@liiift-studio/sanity-ui-compat';
+import { Stack, Select, Text, Card } from '@overpunch/sanity-ui-compat';
 import { listDetectedFeatures } from '../utils/openTypeShowcase';
 
 /** Where the document keeps its openType field unless the schema says otherwise. */

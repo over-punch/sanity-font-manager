@@ -13,7 +13,7 @@ export default defineConfig({
 		'sanity',
 		'@sanity/ui',
 		'@sanity/icons',
-		'@liiift-studio/sanity-advanced-reference-array',
+		'@overpunch/sanity-advanced-reference-array',
 		'zlib',
 		'fs',
 	],

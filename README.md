@@ -1,7 +1,7 @@
-# @liiift-studio/sanity-font-manager
+# @overpunch/sanity-font-manager
 
-[![npm version](https://img.shields.io/npm/v/@liiift-studio/sanity-font-manager.svg)](https://www.npmjs.com/package/@liiift-studio/sanity-font-manager)
-[![license](https://img.shields.io/npm/l/@liiift-studio/sanity-font-manager.svg)](#license)
+[![npm version](https://img.shields.io/npm/v/@overpunch/sanity-font-manager.svg)](https://www.npmjs.com/package/@overpunch/sanity-font-manager)
+[![license](https://img.shields.io/npm/l/@overpunch/sanity-font-manager.svg)](#license)
 [![Sanity v3 · v4 · v5 · v6](https://img.shields.io/badge/Sanity-v3%20%C2%B7%20v4%20%C2%B7%20v5%20%C2%B7%20v6-f03e2f.svg)](https://www.sanity.io/)
 [![tests](https://img.shields.io/badge/tests-440%20passing-brightgreen.svg)](#testing)
 
@@ -32,7 +32,7 @@ and then fails at runtime. The subpaths do not exist on v2 or v3, so neither imp
 works across the whole range.
 
 This plugin therefore imports no `@sanity/ui` or `@sanity/icons` symbol directly. Everything
-goes through [`@liiift-studio/sanity-ui-compat`](https://www.npmjs.com/package/@liiift-studio/sanity-ui-compat),
+goes through [`@overpunch/sanity-ui-compat`](https://www.npmjs.com/package/@overpunch/sanity-ui-compat),
 which reads the installed namespace at runtime and resolves each export against whichever
 major is actually present. It also translates the props v4 renamed (`Stack`/`Inline` `space`
 → `gap`, `Grid` `columns` → `gridTemplateColumns`, `Badge` `mode` removed), which are ignored
@@ -112,13 +112,13 @@ Every phase boundary in that diagram logs its elapsed milliseconds to the browse
 ## Installation
 
 ```bash
-npm install @liiift-studio/sanity-font-manager
+npm install @overpunch/sanity-font-manager
 ```
 
 ### Peer dependencies
 
 ```bash
-npm install sanity @sanity/ui @sanity/icons react @liiift-studio/sanity-advanced-reference-array
+npm install sanity @sanity/ui @sanity/icons react @overpunch/sanity-advanced-reference-array
 ```
 
 | Peer | Required version | Notes |
@@ -127,7 +127,7 @@ npm install sanity @sanity/ui @sanity/icons react @liiift-studio/sanity-advanced
 | `@sanity/ui` | `>=2 <5` | **`<5` is correct for Sanity v6** — Studio v6 ships `@sanity/ui` v4 |
 | `@sanity/icons` | `>=2 <6` | v5 dropped the named `*Icon` exports; resolved at runtime instead |
 | `react` | `>=18` | Sanity v5+ requires React 19.2.2 or newer |
-| `@liiift-studio/sanity-advanced-reference-array` | `>=1` | **Required for the [Quickstart](#quickstart) path.** `createStylesField` and the typeface reference-array fields import it at module load, so importing them without it installed will throw. You only need it if you wire fields the manual way and skip both. |
+| `@overpunch/sanity-advanced-reference-array` | `>=1` | **Required for the [Quickstart](#quickstart) path.** `createStylesField` and the typeface reference-array fields import it at module load, so importing them without it installed will throw. You only need it if you wire fields the manual way and skip both. |
 
 If you hit peer dependency conflicts, add `legacy-peer-deps=true` to your `.npmrc`.
 
@@ -156,7 +156,7 @@ import {
   createStylesField,
   openTypeField,
   styleCountField,
-} from '@liiift-studio/sanity-font-manager';
+} from '@overpunch/sanity-font-manager';
 
 export const typeface = {
   name: 'typeface',
@@ -197,7 +197,7 @@ The uploader **creates and patches `font` documents**, so that type has to exist
 
 ```jsx
 // schemas/font.js
-import { createFontFileFields, SingleUploaderTool } from '@liiift-studio/sanity-font-manager';
+import { createFontFileFields, SingleUploaderTool } from '@overpunch/sanity-font-manager';
 
 export const font = {
   name: 'font',
@@ -486,7 +486,7 @@ The suite is also where regressions get pinned: the batch-upload hang fixed in 2
 Drag-and-drop batch uploader for a typeface document. Accepts TTF/OTF/WOFF/WOFF2 etc., shows a reviewable file list with count, confirm button, elapsed timer, Wake Lock, and `beforeunload` guard for long uploads. Calls `uploadFontFiles` for each batch.
 
 ```jsx
-import { BatchUploadFonts } from '@liiift-studio/sanity-font-manager';
+import { BatchUploadFonts } from '@overpunch/sanity-font-manager';
 
 export const typefaceSchema = {
   name: 'typeface',
@@ -507,7 +507,7 @@ export const typefaceSchema = {
 Per-font file manager inside a font document. Shows TTF/OTF/WOFF/WOFF2/CSS rows always. EOT/SVG/WEB/SUBSET/DATA are hidden behind an advanced toggle (cog icon). Each row has Upload/Build/Delete controls. Handles CSS regeneration, font data extraction, and WEB+SUBSET building via fontWorker.
 
 ```jsx
-import { SingleUploaderTool } from '@liiift-studio/sanity-font-manager';
+import { SingleUploaderTool } from '@overpunch/sanity-font-manager';
 
 {
   name: 'fileInput',
@@ -522,7 +522,7 @@ import { SingleUploaderTool } from '@liiift-studio/sanity-font-manager';
 One-click generator for Full Family, Uprights, Italics, and Subfamily collections, plus Regular/Italic pairs matched by weight. Has configurable price inputs for collection-per-font and pair price.
 
 ```jsx
-import { GenerateCollectionsPairsComponent } from '@liiift-studio/sanity-font-manager';
+import { GenerateCollectionsPairsComponent } from '@overpunch/sanity-font-manager';
 ```
 
 ### `PrimaryCollectionGeneratorTypeface`
@@ -532,7 +532,7 @@ One-click generator for a single full-family collection that includes all fonts 
 Wire it up on a `string` field in the typeface schema:
 
 ```jsx
-import { PrimaryCollectionGeneratorTypeface } from '@liiift-studio/sanity-font-manager';
+import { PrimaryCollectionGeneratorTypeface } from '@overpunch/sanity-font-manager';
 
 {
   name: 'generateCollectionGroup',
@@ -571,7 +571,7 @@ Stylistic sets and character variants are titled with the foundry's own name whe
 Wire it up on the `openType` object field in the typeface schema:
 
 ```jsx
-import { SetOTF } from '@liiift-studio/sanity-font-manager';
+import { SetOTF } from '@overpunch/sanity-font-manager';
 
 {
   name: 'openType',
@@ -587,7 +587,7 @@ import { SetOTF } from '@liiift-studio/sanity-font-manager';
 Displays the total number of font styles (static + variable) linked to a typeface. Reads `styles.fonts` and `styles.variableFont` arrays from the form context. Useful as a read-only display field in the typeface schema.
 
 ```jsx
-import { StyleCountInput } from '@liiift-studio/sanity-font-manager';
+import { StyleCountInput } from '@overpunch/sanity-font-manager';
 
 {
   name: 'styleCount',
@@ -602,7 +602,7 @@ import { StyleCountInput } from '@liiift-studio/sanity-font-manager';
 Generic ordered key-value editor where both keys and values are plain strings. Supports add, remove, and reorder (up/down arrows). Values are stored as an array of `{ key, value }` objects.
 
 ```jsx
-import { KeyValueInput } from '@liiift-studio/sanity-font-manager';
+import { KeyValueInput } from '@overpunch/sanity-font-manager';
 
 {
   name: 'aliases',
@@ -623,7 +623,7 @@ Generic key-value editor where keys are plain strings and values are weak Sanity
 | `referenceType` | `string` | Document type for the created weak references (default: `'font'`). |
 
 ```jsx
-import { KeyValueReferenceInput } from '@liiift-studio/sanity-font-manager';
+import { KeyValueReferenceInput } from '@overpunch/sanity-font-manager';
 
 {
   name: 'instanceMap',
@@ -649,7 +649,7 @@ Font-specific wrapper around `KeyValueReferenceInput` for mapping variable font 
 - Replace/merge confirmation dialog when pairs already exist
 
 ```jsx
-import { VariableInstanceReferencesInput } from '@liiift-studio/sanity-font-manager';
+import { VariableInstanceReferencesInput } from '@overpunch/sanity-font-manager';
 
 {
   name: 'variableInstanceReferences',
@@ -674,7 +674,7 @@ import { VariableInstanceReferencesInput } from '@liiift-studio/sanity-font-mana
 Generic Sanity input that renders a searchable checkbox list of items pulled from a nested array field across documents of a given type (backed by [`useNestedObjects`](#usenestedobjects)). Configure entirely via schema `options`.
 
 ```jsx
-import { NestedObjectArraySelector } from '@liiift-studio/sanity-font-manager';
+import { NestedObjectArraySelector } from '@overpunch/sanity-font-manager';
 
 {
   name: 'sections',
@@ -699,7 +699,7 @@ import { NestedObjectArraySelector } from '@liiift-studio/sanity-font-manager';
 Shared status bar used by all components. Shows `Status: [message]` in green on success and red on error, with an optional `action` element slot on the far right (used for the advanced toggle in `SingleUploaderTool`).
 
 ```jsx
-import { StatusDisplay } from '@liiift-studio/sanity-font-manager';
+import { StatusDisplay } from '@overpunch/sanity-font-manager';
 
 <StatusDisplay status="ready" error={false} action={<Button ... />} />
 ```
@@ -723,7 +723,7 @@ Pre-built Sanity schema field objects that can be spread directly into a typefac
 Factory that builds the complete `styles` object field — the fonts, variable-font, collections, and pairs reference arrays plus the subfamily groups — for a typeface document. This is the field `BatchUploadFonts` reads and writes (see [Quickstart](#quickstart)). Call it with options to toggle optional sub-fields:
 
 ```js
-import { createStylesField, BatchUploadFonts } from '@liiift-studio/sanity-font-manager';
+import { createStylesField, BatchUploadFonts } from '@overpunch/sanity-font-manager';
 
 {
   ...createStylesField({ generateCollections: true, pairs: true, styleCount: true }),
@@ -740,14 +740,14 @@ import { createStylesField, BatchUploadFonts } from '@liiift-studio/sanity-font-
 | `styleCount` | `false` | Inject the read-only style-count field (`StyleCountInput`). |
 | `displayStyles`, `free`, `serif`, `sortHeaviestFirst`, `buySectionColumns`, `fontSizeMultiplier`, `subfamily*` | various | Storefront/display toggles — see the source for the full set. |
 
-> Uses `@liiift-studio/sanity-advanced-reference-array` (a peer dependency — see [Peer dependencies](#peer-dependencies)) for the typeface-scoped reference pickers.
+> Uses `@overpunch/sanity-advanced-reference-array` (a peer dependency — see [Peer dependencies](#peer-dependencies)) for the typeface-scoped reference pickers.
 
 ### `createFontFileFields`
 
 Factory that builds the **font** document's `fileInput` object — the per-format file set every foundry stores. Hand-copying it into each studio's schema let the shape drift, which matters because the uploader patches these exact paths. Spread the result into your `font` document's `fields` array (see [Quickstart](#quickstart)).
 
 ```js
-import { createFontFileFields, SingleUploaderTool } from '@liiift-studio/sanity-font-manager';
+import { createFontFileFields, SingleUploaderTool } from '@overpunch/sanity-font-manager';
 
 createFontFileFields({ input: SingleUploaderTool, group: 'files' }),
 ```
@@ -770,7 +770,7 @@ Emits `ttf` (with an `.ttf` accept filter, since it is the source everything els
 A complete `openType` object field wired to the `openType` tab group. Includes the `features` checkbox array (all standard OpenType feature keys) plus per-feature sub-objects with `title`, `feature`, and `customText` fields. Uses `SetOTF` internally for auto-detection.
 
 ```js
-import { openTypeField } from '@liiift-studio/sanity-font-manager';
+import { openTypeField } from '@overpunch/sanity-font-manager';
 
 // In your typeface schema fields array:
 openTypeField,
@@ -786,7 +786,7 @@ Requires the `openType` group to be declared in your schema's `groups` array:
 Factory variant of `openTypeField`. Pass `{ customText: true }` to reveal a per-feature `customText` input on every feature object; pass `{ customText: true, customTextType: 'code' }` to make it a syntax-highlighted HTML `code` field (for `<span>`-wrapped sample text). Returns a plain `openTypeField` when `customText` is `false`.
 
 ```js
-import { createOpenTypeField } from '@liiift-studio/sanity-font-manager';
+import { createOpenTypeField } from '@overpunch/sanity-font-manager';
 
 // In your typeface schema fields array:
 createOpenTypeField({ customText: true, customTextType: 'code' }),
@@ -797,7 +797,7 @@ createOpenTypeField({ customText: true, customTextType: 'code' }),
 A read-only `number` field in the `styles` group that displays the total count of static + variable font styles linked to the typeface. Uses `StyleCountInput` internally.
 
 ```js
-import { styleCountField } from '@liiift-studio/sanity-font-manager';
+import { styleCountField } from '@overpunch/sanity-font-manager';
 
 // In your typeface schema fields array:
 styleCountField,
@@ -808,7 +808,7 @@ styleCountField,
 A complete `stylisticSet` object field for the `stylisticSets` group. Contains two sub-arrays: `featured` (highlighted words/phrases with per-character backtick syntax, stylistic feature picker, size, and CSS overrides) and `sets` (full catalogue of feature → glyph mappings). Both include the full OpenType feature dropdown (44 named features + all 20 stylistic sets).
 
 ```js
-import { stylisticSetField } from '@liiift-studio/sanity-font-manager';
+import { stylisticSetField } from '@overpunch/sanity-font-manager';
 
 // In your typeface schema fields array:
 stylisticSetField,
@@ -826,7 +826,7 @@ New work should prefer `createOpenTypeShowcaseField` below — this field's card
 An array of OpenType demo cards that **reference** the typeface's detected `openType` features instead of repeating them. The `openType` field stays the single source of truth — "Detect OTF" finds the features, the foundry reviews their titles and tags — and a card only adds what is its own: demo text (backtick syntax), the glyphs the feature affects, display size and default-off flags. The feature is picked with `OpenTypeFeaturePicker`, which lists only the features this typeface has detected and stores the openType key (`stylisticSet1`), never a CSS string.
 
 ```js
-import { createOpenTypeField, createOpenTypeShowcaseField } from '@liiift-studio/sanity-font-manager';
+import { createOpenTypeField, createOpenTypeShowcaseField } from '@overpunch/sanity-font-manager';
 
 // In your typeface schema fields array — keep the two together, openType first:
 createOpenTypeField(),
@@ -849,7 +849,7 @@ A card opens on the fields editors fill in — feature, content, glyphs, label o
 **Front end:** resolve each card against the same document's `openType` value.
 
 ```js
-import { resolveShowcaseCard } from '@liiift-studio/sanity-font-manager';
+import { resolveShowcaseCard } from '@overpunch/sanity-font-manager';
 
 const { label, css, detected } = resolveShowcaseCard(card, typeface.openType);
 // label: card.label, else the reviewed openType title
@@ -867,7 +867,7 @@ The helpers (`resolveShowcaseCard`, `matchFeatureKey`, `listDetectedFeatures`, `
 Returns the Sanity client instance from the studio context. Used internally by all components.
 
 ```js
-import { useSanityClient } from '@liiift-studio/sanity-font-manager';
+import { useSanityClient } from '@overpunch/sanity-font-manager';
 
 const client = useSanityClient();
 ```
@@ -877,7 +877,7 @@ const client = useSanityClient();
 Fetches and flattens a nested array field across documents of a given type into a flat list of selectable items. Backs `NestedObjectArraySelector`.
 
 ```js
-import { useNestedObjects } from '@liiift-studio/sanity-font-manager';
+import { useNestedObjects } from '@overpunch/sanity-font-manager';
 
 const { objects, loading, error } = useNestedObjects({
   sourceType: 'licenseGroup',   // document type to query

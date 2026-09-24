@@ -1,7 +1,7 @@
 // Batch uploader for script-specific font variants across multiple fonts at once
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Flex, Grid, Stack, Text, TextInput, MenuButton, Menu, MenuItem, Select } from '@liiift-studio/sanity-ui-compat';
+import { Button, Flex, Grid, Stack, Text, TextInput, MenuButton, Menu, MenuItem, Select } from '@overpunch/sanity-ui-compat';
 import { parseFont } from '../utils/parseFont';
 import { getNameString, getVariationAxes, getItalicAngle, getWeightClass } from '../utils/fontHelpers';
 import slugify from 'slugify';

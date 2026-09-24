@@ -1,6 +1,6 @@
 // Sanity schema factory function for the Styles object field — call createStylesField(options) to generate the field definition for a typeface document
 import React from 'react';
-import { AdvancedRefArray } from '@liiift-studio/sanity-advanced-reference-array';
+import { AdvancedRefArray } from '@overpunch/sanity-advanced-reference-array';
 import { RegenerateSubfamiliesComponent } from '../components/RegenerateSubfamiliesComponent.jsx';
 import { GenerateCollectionsPairsComponent } from '../components/GenerateCollectionsPairsComponent.jsx';
 import { PrimaryCollectionGeneratorTypeface } from '../components/PrimaryCollectionGeneratorTypeface.jsx';

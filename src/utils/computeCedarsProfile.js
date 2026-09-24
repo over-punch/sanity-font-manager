@@ -1,6 +1,6 @@
 // Computes a font's CEDARS+ profile from its raw bytes, shaped for the Sanity
-// `cedarsPlus` field. Thin wrapper around @liiift-studio/cedars-engine (v3).
-import { analyzeFont, CEDARS_FACETS } from '@liiift-studio/cedars-engine';
+// `cedarsPlus` field. Thin wrapper around @overpunch/cedars-engine (v3).
+import { analyzeFont, CEDARS_FACETS } from '@overpunch/cedars-engine';
 
 /**
  * Compute the CEDARS+ profile for a font from its raw outline geometry. v3 models CEDARS as

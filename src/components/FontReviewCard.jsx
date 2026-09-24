@@ -1,8 +1,8 @@
 // Per-font review row — table-style header with expandable detail panel
 
 import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
-import { Card, Stack, Flex, Box, Text, TextInput, Badge, Button, Select, Tooltip, Label, Checkbox } from '@liiift-studio/sanity-ui-compat';
-import { ChevronDownIcon, ChevronRightIcon, TrashIcon, ResetIcon, InfoOutlineIcon } from '@liiift-studio/sanity-ui-compat/icons';
+import { Card, Stack, Flex, Box, Text, TextInput, Badge, Button, Select, Tooltip, Label, Checkbox } from '@overpunch/sanity-ui-compat';
+import { ChevronDownIcon, ChevronRightIcon, TrashIcon, ResetIcon, InfoOutlineIcon } from '@overpunch/sanity-ui-compat/icons';
 import { FONT_STATUS, RECOMMENDATION, isResolutionStale } from '../utils/planTypes';
 import ExistingDocumentResolver from './ExistingDocumentResolver';
 import { HighlightedName } from './HighlightedName';

@@ -1,7 +1,7 @@
 // Shared status bar — shows status message in green/red with an optional action slot on the far right
 
 import React from 'react';
-import { Flex, Text } from '@liiift-studio/sanity-ui-compat';
+import { Flex, Text } from '@overpunch/sanity-ui-compat';
 
 /**
  * Shows an upload/operation status string coloured green on success and red on error.

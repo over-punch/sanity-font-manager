@@ -1,8 +1,8 @@
 // Generic key-value pair editor where values are weak Sanity document references — add, remove, reorder, and searchable picker
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Button, Stack, TextInput, Box, Card, Flex, Text, Dialog, Menu, MenuButton, MenuItem, Autocomplete } from '@liiift-studio/sanity-ui-compat';
-import { AddIcon, ArrowDownIcon, ArrowUpIcon, TrashIcon, SyncIcon, EllipsisHorizontalIcon } from '@liiift-studio/sanity-ui-compat/icons';
+import { Button, Stack, TextInput, Box, Card, Flex, Text, Dialog, Menu, MenuButton, MenuItem, Autocomplete } from '@overpunch/sanity-ui-compat';
+import { AddIcon, ArrowDownIcon, ArrowUpIcon, TrashIcon, SyncIcon, EllipsisHorizontalIcon } from '@overpunch/sanity-ui-compat/icons';
 import { set, useFormValue } from 'sanity';
 import { useSanityClient } from '../hooks/useSanityClient.js';
 import { nanoid } from 'nanoid';

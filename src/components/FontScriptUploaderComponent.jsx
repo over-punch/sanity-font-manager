@@ -1,7 +1,7 @@
 // Script-aware uploader for per-script font file variants (Latin, Arabic, Hebrew, etc.) stored in scriptFileInput
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Stack, Flex, Text, Button } from '@liiift-studio/sanity-ui-compat';
+import { Stack, Flex, Text, Button } from '@overpunch/sanity-ui-compat';
 import { useFormValue, set, unset } from 'sanity';
 
 // Utils

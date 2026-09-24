@@ -1,5 +1,5 @@
 // Factory for the OpenType showcase field — demo cards that reference the typeface's detected openType features
-import { StringIcon } from '@liiift-studio/sanity-ui-compat/icons';
+import { StringIcon } from '@overpunch/sanity-ui-compat/icons';
 import { OpenTypeFeaturePicker } from '../components/OpenTypeFeaturePicker.jsx';
 import { OPENTYPE_FEATURE_TAGS } from './openTypeFeatureTags.js';
 

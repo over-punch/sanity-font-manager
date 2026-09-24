@@ -35,8 +35,8 @@ The upload modal overhaul is a **semver major** bump (v2.x → v3.0) because it 
 ### 1. Update package.json
 
 ```diff
-- "@liiift-studio/sanity-font-manager": "^2.3.19"
-+ "@liiift-studio/sanity-font-manager": "^3.0.0"
+- "@overpunch/sanity-font-manager": "^2.3.19"
++ "@overpunch/sanity-font-manager": "^3.0.0"
 ```
 
 ### 2. Check for direct utility imports

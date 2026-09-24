@@ -1,7 +1,7 @@
 // Displays the total count of static and variable font styles linked to a typeface document
 
 import React from 'react';
-import { Text } from '@liiift-studio/sanity-ui-compat';
+import { Text } from '@overpunch/sanity-ui-compat';
 import { useFormValue } from 'sanity';
 
 /** Reads styles.fonts and styles.variableFont arrays and displays the combined count. */

@@ -1,8 +1,8 @@
 // Per-font file manager — TTF/OTF/WOFF/WOFF2/CSS rows always visible; WEB/SUBSET with a WOFF2, TRIAL (env-gated) with an OTF/TTF; EOT/SVG/DATA behind an advanced toggle
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Button, Grid, Stack, Flex, Box, Text, Card, Switch } from '@liiift-studio/sanity-ui-compat';
-import { TrashIcon, ControlsIcon } from '@liiift-studio/sanity-ui-compat/icons';
+import { Button, Grid, Stack, Flex, Box, Text, Card, Switch } from '@overpunch/sanity-ui-compat';
+import { TrashIcon, ControlsIcon } from '@overpunch/sanity-ui-compat/icons';
 import { useFormValue, set, unset } from 'sanity';
 import { parseFont } from '../utils/parseFont';
 

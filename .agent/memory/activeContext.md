@@ -1,4 +1,4 @@
-# Active Context — @liiift-studio/sanity-font-manager
+# Active Context — @overpunch/sanity-font-manager
 
 Last updated: 2026-09-15
 

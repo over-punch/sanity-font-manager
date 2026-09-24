@@ -1,7 +1,7 @@
 // Merge dialog — folds several review entries for the same style into one font document
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { Dialog, Box, Card, Stack, Flex, Text, Label, Badge, Button, Radio, Select } from '@liiift-studio/sanity-ui-compat';
+import { Dialog, Box, Card, Stack, Flex, Text, Label, Badge, Button, Radio, Select } from '@overpunch/sanity-ui-compat';
 import { mergeFontEntries, findFileTypeCollisions, fileTypeOf, OUTLINE_FILE_TYPES } from '../utils/mergeFontEntries';
 
 /** Human-readable reasons a file is left out of the merged set */

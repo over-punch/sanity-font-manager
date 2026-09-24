@@ -1,8 +1,8 @@
 // Step 2 — Processing & Review with settings, FontReviewCard, BulkActions, and subfamily grouping
 
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { Box, Grid, Stack, Flex, Text, Label, Switch, Button, Card, Spinner, Badge, Tooltip } from '@liiift-studio/sanity-ui-compat';
-import { InfoOutlineIcon } from '@liiift-studio/sanity-ui-compat/icons';
+import { Box, Grid, Stack, Flex, Text, Label, Switch, Button, Card, Spinner, Badge, Tooltip } from '@overpunch/sanity-ui-compat';
+import { InfoOutlineIcon } from '@overpunch/sanity-ui-compat/icons';
 import { PLAN_PHASE, FONT_STATUS, RECOMMENDATION } from '../utils/planTypes';
 import FontReviewCard from './FontReviewCard';
 import BulkActions from './BulkActions';

@@ -1,8 +1,8 @@
 // Font-specific wrapper around KeyValueReferenceInput — maps variable font instances to static font documents with autofill
 
 import React, { useState, useCallback } from 'react';
-import { Button, Flex, Dialog, Box, Stack, Text } from '@liiift-studio/sanity-ui-compat';
-import { SyncIcon, DocumentTextIcon } from '@liiift-studio/sanity-ui-compat/icons';
+import { Button, Flex, Dialog, Box, Stack, Text } from '@overpunch/sanity-ui-compat';
+import { SyncIcon, DocumentTextIcon } from '@overpunch/sanity-ui-compat/icons';
 import { set, useFormValue } from 'sanity';
 import { KeyValueReferenceInput } from './KeyValueReferenceInput.jsx';
 import { useSanityClient } from '../hooks/useSanityClient.js';

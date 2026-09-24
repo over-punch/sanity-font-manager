@@ -1,5 +1,5 @@
 {
-  "name": "@liiift-studio/sanity-font-manager",
+  "name": "@overpunch/sanity-font-manager",
   "version": "2.24.2",
   "description": "Sanity Studio plugin — full font management suite with batch upload, format conversion, metadata extraction, CSS generation, collection/pair generation, and script variant support. Supports Sanity Studio v3 through v6.",
   "license": "MIT",
@@ -44,15 +44,15 @@
     "build": "npm run test && tsup",
     "dev": "tsup --watch",
     "prepublishOnly": "npm run build",
-    "link:darden": "npm link && cd ../../../sites/darden/sanity && npm link @liiift-studio/sanity-font-manager",
-    "link:tdf": "npm link && cd ../../../sites/tdf/sanity && npm link @liiift-studio/sanity-font-manager",
-    "link:mckl": "npm link && cd ../../../sites/mckl/cms && npm link @liiift-studio/sanity-font-manager",
-    "link:all": "npm link && cd ../../../sites/darden/sanity && npm link @liiift-studio/sanity-font-manager && cd ../../tdf/sanity && npm link @liiift-studio/sanity-font-manager && cd ../../mckl/cms && npm link @liiift-studio/sanity-font-manager"
+    "link:darden": "npm link && cd ../../../sites/darden/sanity && npm link @overpunch/sanity-font-manager",
+    "link:tdf": "npm link && cd ../../../sites/tdf/sanity && npm link @overpunch/sanity-font-manager",
+    "link:mckl": "npm link && cd ../../../sites/mckl/cms && npm link @overpunch/sanity-font-manager",
+    "link:all": "npm link && cd ../../../sites/darden/sanity && npm link @overpunch/sanity-font-manager && cd ../../tdf/sanity && npm link @overpunch/sanity-font-manager && cd ../../mckl/cms && npm link @overpunch/sanity-font-manager"
   },
   "dependencies": {
-    "@liiift-studio/cedars-engine": "^3.0.0",
-    "@liiift-studio/confettitext": "^3.0.0",
-    "@liiift-studio/sanity-ui-compat": "^0.1.2",
+    "@overpunch/cedars-engine": "^3.0.0",
+    "@overpunch/confettitext": "^3.0.0",
+    "@overpunch/sanity-ui-compat": "^0.1.2",
     "base-64": "^1.0.0",
     "lib-font": "^3.0.1",
     "nanoid": "^5.0.0",
@@ -60,14 +60,14 @@
     "slugify": "^1.6.6"
   },
   "peerDependencies": {
-    "@liiift-studio/sanity-advanced-reference-array": ">=1",
+    "@overpunch/sanity-advanced-reference-array": ">=1",
     "@sanity/icons": ">=2 <6",
     "@sanity/ui": ">=2 <5",
     "react": ">=18",
     "sanity": ">=3 <7"
   },
   "peerDependenciesMeta": {
-    "@liiift-studio/sanity-advanced-reference-array": {
+    "@overpunch/sanity-advanced-reference-array": {
       "optional": true
     }
   },

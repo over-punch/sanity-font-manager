@@ -1,7 +1,7 @@
 // Upload modal — multi-step state machine: Upload Files → Review → Execute → Map Instances → Summary
 
 import React, { useReducer, useCallback, useState, useMemo, useRef, useEffect } from 'react';
-import { Dialog, Box, Flex, Text, Badge, Button } from '@liiift-studio/sanity-ui-compat';
+import { Dialog, Box, Flex, Text, Badge, Button } from '@overpunch/sanity-ui-compat';
 import { planReducer } from '../utils/planReducer';
 import { createEmptyPlan, PLAN_PHASE } from '../utils/planTypes';
 import { getTrialConfig } from '../utils/trialFonts';

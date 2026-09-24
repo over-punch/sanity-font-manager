@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { set, useFormValue } from 'sanity';
-import { Stack, Button, Text } from '@liiift-studio/sanity-ui-compat';
+import { Stack, Button, Text } from '@overpunch/sanity-ui-compat';
 import { useSanityClient } from '../hooks/useSanityClient';
 import { detectOpenTypeFeatures } from '../utils/detectOpenTypeFeatures';
 

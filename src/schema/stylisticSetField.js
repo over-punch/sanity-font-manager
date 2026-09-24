@@ -1,5 +1,5 @@
 // Sanity schema field definition for the Stylistic Features section — featured words and full feature set
-import { StringIcon } from '@liiift-studio/sanity-ui-compat/icons';
+import { StringIcon } from '@overpunch/sanity-ui-compat/icons';
 
 export const stylisticSetField = {
 	title: 'Stylistic Features Section', 

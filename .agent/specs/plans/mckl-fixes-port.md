@@ -2,7 +2,7 @@
 
 Status: Planned. Not yet started in this repo.
 Source: `mckl/cms` submodule, branch `fix/font-uploader-preserve-filenames` (9 commits, HEAD `6c35828` as of 2026-05-28).
-Target: This package (`@liiift-studio/sanity-font-manager`), currently at `v2.3.19`.
+Target: This package (`@overpunch/sanity-font-manager`), currently at `v2.3.19`.
 
 ## Why
 

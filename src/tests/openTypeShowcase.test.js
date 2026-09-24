@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 // The factory wires a Studio input and an icon; stub both so the schema imports without React/Studio.
 vi.mock('../components/OpenTypeFeaturePicker.jsx', () => ({ OpenTypeFeaturePicker: 'OpenTypeFeaturePicker' }));
-vi.mock('@liiift-studio/sanity-ui-compat/icons', () => ({ StringIcon: 'StringIcon' }));
+vi.mock('@overpunch/sanity-ui-compat/icons', () => ({ StringIcon: 'StringIcon' }));
 
 import {
 	featureTagsToCss,
