@@ -1,15 +1,22 @@
 // Sanity schema field for the auto-computed CEDARS+ typographic profile (v3).
 // Read-only; populated on font upload by computeCedarsProfile (see utils).
 
-// The continuous CEDARS scales, in canonical order — shared by scores/labels/availability.
-const SCALES = ['contrast', 'energy', 'rhythm', 'pattern', 'aperture'];
+// The continuous CEDARS scales, in canonical order — shared by scores/labels/availability. Order
+// is load-bearing: it is the recall-vector dimension order, so these must stay in engine order.
+//
+// Renamed in engine v6: the stem-width scale was called `rhythm` and the spacing-regularity scale
+// was called `pattern`, which had CEDARS' R pointing at the wrong measurement. Width is not one of
+// the six letters and now sits under the "+"; Rhythm is regularity, which is what ILT means by R.
+const SCALES = ['contrast', 'energy', 'width', 'rhythm', 'aperture'];
 
 // The categorical CEDARS facets (soft-classified named qualities), in canonical order.
 const FACETS = ['loops', 'terminals', 'transitions', 'fill', 'construction'];
 
-// Build a title-cased label from a key (e.g. 'contrast' -> 'Contrast'; 'rhythm' -> 'Width').
+// Build a title-cased label from a key (e.g. 'contrast' -> 'Contrast').
+//
+// The `rhythm -> Width` special case that used to live here is gone: it papered over the engine
+// misnaming its own scale, and the rename removed the thing it was compensating for.
 function titleCase(key) {
-	if (key === 'rhythm') return 'Width';
 	return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
