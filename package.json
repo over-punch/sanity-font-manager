@@ -1,6 +1,6 @@
 {
   "name": "@overpunch/sanity-font-manager",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Sanity Studio plugin \u2014 full font management suite with batch upload, format conversion, metadata extraction, CSS generation, collection/pair generation, and script variant support. Supports Sanity Studio v3 through v6.",
   "license": "MIT",
   "author": "Liiift Studio",

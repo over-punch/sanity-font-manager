@@ -1,4 +1,4 @@
-// Sanity schema field for the auto-computed CEDARS+ typographic profile (v3).
+// Sanity schema field for the auto-computed CEDARS+ typographic profile (engine v6).
 // Read-only; populated on font upload by computeCedarsProfile (see utils).
 
 // The continuous CEDARS scales, in canonical order — shared by scores/labels/availability. Order
@@ -52,7 +52,7 @@ export const cedarsProfileField = {
 	name: 'cedarsPlus',
 	type: 'object',
 	description:
-		'Auto-computed typographic profile from the font outlines (v3): continuous scales (Contrast, Energy, Width, Pattern, Aperture, 0–100), a stress Axis angle, and categorical facets (Loops, Terminals, Transitions, Fill, Construction). Read-only; set on upload.',
+		'Auto-computed typographic profile from the font outlines: continuous scales (Contrast, Energy, Rhythm, Aperture, plus Width), a stress Axis angle, and categorical facets (Loops, Terminals, Transitions, Fill, Construction). Scores are NOT 0–100 — 0 and 100 are named landmark archetypes, so readings above 100 and below 0 are correct. Read-only; set on upload.',
 	readOnly: true,
 	options: { collapsible: true, collapsed: true },
 	fields: [
@@ -100,6 +100,70 @@ export const cedarsProfileField = {
 			fields: facetFields,
 		},
 		{
+			// The RAW measured quantities behind the scores. A score is (raw quantity) x (landmark
+			// map); storing only the score fuses the two, so re-tuning a landmark would mean
+			// re-parsing every font file — the cost that stops calibration ever happening. With
+			// raws stored it is a pure re-map: read raw, apply the new map, write the score.
+			//
+			// Two scales store COMPONENTS rather than a composite, because their composite bakes in
+			// a tunable constant: energy folds in springHeightWeight and rhythm folds in meanFloor.
+			// Persisting the composite would force a reseed on any retune of either.
+			//
+			// A scale's key is present if and only if that scale was measurable; `axis` is always
+			// present, and its null angle for a monoline face IS the measurement.
+			title: 'Raw measurements',
+			name: 'raw',
+			type: 'object',
+			options: { collapsible: true, collapsed: true },
+			fields: [
+				{
+					title: 'Contrast',
+					name: 'contrast',
+					type: 'object',
+					fields: [{ title: 'Thick/thin ratio', name: 'ratio', type: 'number' }],
+				},
+				{
+					title: 'Energy',
+					name: 'energy',
+					type: 'object',
+					fields: [
+						{ title: 'Secant (deg)', name: 'secantDeg', type: 'number' },
+						{ title: 'Spring height / x-height', name: 'springHeightRatio', type: 'number' },
+					],
+				},
+				{
+					title: 'Width',
+					name: 'width',
+					type: 'object',
+					fields: [{ title: 'Width / x-height', name: 'widthRatio', type: 'number' }],
+				},
+				{
+					title: 'Rhythm',
+					name: 'rhythm',
+					type: 'object',
+					fields: [
+						{ title: 'Pooled SD', name: 'pooledSd', type: 'number' },
+						{ title: 'Mean budget', name: 'meanBudget', type: 'number' },
+					],
+				},
+				{
+					title: 'Aperture',
+					name: 'aperture',
+					type: 'object',
+					fields: [{ title: 'Openness ratio', name: 'opennessRatio', type: 'number' }],
+				},
+				{
+					title: 'Axis',
+					name: 'axis',
+					type: 'object',
+					fields: [
+						{ title: 'Angle (deg, null = monoline)', name: 'angleDeg', type: 'number' },
+						{ title: 'Stress confidence', name: 'stressConfidence', type: 'number' },
+					],
+				},
+			],
+		},
+		{
 			title: '+ Descriptors',
 			name: 'plus',
 			type: 'object',
@@ -111,7 +175,9 @@ export const cedarsProfileField = {
 			],
 		},
 		{
-			// Recall vector [scales/100 …, sin2θ, cos2θ] — kept for similarity search / export.
+			// Recall vector [scoreToRecallDim(scale, score) …, sin2θ·conf, cos2θ·conf] — kept for
+			// similarity search / export. Not scores/100: since engine v5 each score goes through a
+			// shared squash so an unbounded reading cannot swamp the composite.
 			title: 'Vector',
 			name: 'vector',
 			type: 'array',
