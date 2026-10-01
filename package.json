@@ -1,6 +1,6 @@
 {
   "name": "@overpunch/sanity-font-manager",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Sanity Studio plugin \u2014 full font management suite with batch upload, format conversion, metadata extraction, CSS generation, collection/pair generation, and script variant support. Supports Sanity Studio v3 through v6.",
   "license": "MIT",
   "author": "Liiift Studio",
@@ -50,7 +50,7 @@
     "link:all": "npm link && cd ../../../sites/darden/sanity && npm link @overpunch/sanity-font-manager && cd ../../tdf/sanity && npm link @overpunch/sanity-font-manager && cd ../../mckl/cms && npm link @overpunch/sanity-font-manager"
   },
   "dependencies": {
-    "@overpunch/cedars-engine": "^6.0.0",
+    "@overpunch/cedars-engine": "^7.0.0",
     "@overpunch/confettitext": "^3.0.0",
     "@overpunch/sanity-ui-compat": "^0.1.2",
     "base-64": "^1.0.0",
